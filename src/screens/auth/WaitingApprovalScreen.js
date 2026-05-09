@@ -8,18 +8,39 @@
  * "Back to Login" navigates back to Login screen.
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, ScrollView,
 } from 'react-native';
 import { useAuthStore } from '../../store/AuthStore';
 
 export default function WaitingApprovalScreen({ navigation, route }) {
-  const logout = useAuthStore((s) => s.logout);
+  const logout        = useAuthStore((s) => s.logout);
+  const loginUser     = useAuthStore((s) => s.loginUser);
+  const registeredUsers = useAuthStore((s) => s.registeredUsers);
 
   const name               = route?.params?.name || 'User';
   const role               = route?.params?.role || 'user';
+  const phone              = route?.params?.phone || null;
   const verificationStatus = route?.params?.verificationStatus || 'not_submitted';
+
+  // Auto-redirect: if user has been approved while on this screen, go to login
+  // so they can re-authenticate and land on their dashboard immediately.
+  useEffect(() => {
+    if (!phone) return;
+    const clean = phone.toString().trim().replace(/\s+/g, '');
+    const found = registeredUsers.find(u => {
+      const uPhone = (u.phone || '').toString().trim().replace(/\s+/g, '');
+      return uPhone === clean || uPhone.slice(-10) === clean.slice(-10);
+    });
+    if (found && (found.verificationStatus === 'approved' || found.approvalStatus === 'approved')) {
+      // Re-login automatically so they land on dashboard
+      const result = loginUser(phone, '');
+      if (result?.verificationStatus === 'approved') {
+        // isLoggedIn is now true — RootNavigator will route to dashboard
+      }
+    }
+  }, [registeredUsers, phone]);
 
   const isPending      = verificationStatus === 'pending' || verificationStatus === 'pending_approval';
   const isNotSubmitted = verificationStatus === 'not_submitted';

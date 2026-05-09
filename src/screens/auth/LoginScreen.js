@@ -141,6 +141,7 @@ function LoginContent({ navigation }) {
       navigation.navigate("WaitingApproval", {
         name: result.user?.name,
         role: result.user?.role,
+        phone: result.user?.phone,
         verificationStatus: vs,
       });
       return;
@@ -161,7 +162,12 @@ function LoginContent({ navigation }) {
       return;
     }
 
-    // If approved, loginUser already sets isLoggedIn=true
+    // vs === 'approved': loginUser() already set isLoggedIn=true.
+    // RootNavigator's Zustand subscription triggers the re-render to the dashboard.
+    // No explicit navigation needed — but we return early to be safe.
+    if (vs === 'approved') {
+      return;
+    }
   };
 
   const handleCustSendOtp = () => {

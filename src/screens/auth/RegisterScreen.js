@@ -49,7 +49,7 @@ const P = {
 
 export default function RegisterScreen({ navigation }) {
   const registerUser = useAuthStore((s) => s.registerUser);
-  const { addBuilderRequest, addAdminRequest } = useAppContext();
+  // addBuilderRequest/addAdminRequest now called only from VerificationScreen
 
   const [name,            setName]            = useState('');
   const [phone,           setPhone]           = useState('');
@@ -98,34 +98,9 @@ export default function RegisterScreen({ navigation }) {
     if (role === 'Builder')   { extraData.company   = extraField.trim(); }
     if (role === 'Admin')     { extraData.society   = extraField.trim(); }
 
-    // Push to SuperAdmin BEFORE registerUser() triggers navigation
-    // (registerUser sets isLoggedIn=true → RootNavigator unmounts this screen immediately,
-    //  so any context calls placed after it are swallowed. Call them first.)
-    if (role === 'Builder') {
-      addBuilderRequest({
-        companyName: extraField.trim() || name.trim(),
-        name:        name.trim(),
-        email:       '',
-        phone:       phone.trim(),
-        password,
-        city:        '',
-        reraNumber:  '',
-        gst:         '',
-        documents:   {},
-      });
-    }
-
-    if (role === 'Admin') {
-      addAdminRequest({
-        name:          name.trim(),
-        emailOrMobile: phone.trim(),
-        phone:         phone.trim(),
-        password,
-        societyName:   extraField.trim(),
-        society:       extraField.trim(),
-        approvalStatus: 'Pending',
-      });
-    }
+    // Note: addAdminRequest / addBuilderRequest are called from VerificationScreen
+    // when the user actually submits their documents. We do NOT call them here
+    // to avoid duplicate entries in the SuperAdmin dashboard.
 
     // registerUser() auto-logs in → RootNavigator routes to dashboard
     const result = registerUser({

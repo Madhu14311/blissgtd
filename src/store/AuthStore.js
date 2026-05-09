@@ -138,10 +138,10 @@ export const useAuthStore = create(
         // pending / not_submitted → LoginScreen shows WaitingApproval
         if (vs === 'approved') {
           set({
-            user:           found,
+            user:           { ...found, verificationStatus: 'approved', approvalStatus: 'approved' },
             token:          found.token ?? `token-${found.id}`,
             role:           found.role,
-            approvalStatus: found.approvalStatus ?? 'approved',
+            approvalStatus: 'approved',
             isLoggedIn:     true,
           });
         }

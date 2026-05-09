@@ -1486,6 +1486,7 @@
 
 import React, { createContext, useState, useContext } from "react";
 import { societyRequests, builders as initialBuilders } from "../../data/superAdminData";
+import { useAuthStore } from "../../store/AuthStore";
 
 const SocietyContext = createContext(null);
 
@@ -1546,6 +1547,7 @@ const normalizeProjectPayload = (project, status = "Pending") => ({
 });
 
 export const SocietyProvider = ({ children }) => {
+  const approveVerification = useAuthStore((s) => s.approveVerification);
   const [societies, setSocieties] = useState(societyRequests);
   const [builders, setBuilders] = useState(initialBuilders);
   const [projectRequests, setProjectRequests] = useState(initialProjectRequests);
@@ -1679,6 +1681,17 @@ export const SocietyProvider = ({ children }) => {
       )
     );
 
+    // Sync approval into AuthStore so loginUser() sees verificationStatus='approved'
+    if (selectedBuilder?.phone) {
+      const { registeredUsers, approveVerification: av } = useAuthStore.getState();
+      const match = registeredUsers.find(u => {
+        const a = (u.phone || '').toString().trim().slice(-10);
+        const b = (selectedBuilder.phone || '').toString().trim().slice(-10);
+        return a === b;
+      });
+      if (match) av(match.id, true);
+    }
+
     addNotification({
       title: "✅ Registration Approved",
       message: `Your builder registration for "${selectedBuilder.companyName}" has been approved by Super Admin.`,
@@ -1802,6 +1815,17 @@ export const SocietyProvider = ({ children }) => {
     );
 
     const selectedAdmin = adminRequests.find((a) => a.id === adminId);
+
+    // Sync approval into AuthStore so loginUser() sees verificationStatus='approved'
+    if (selectedAdmin?.phone) {
+      const { registeredUsers, approveVerification: av } = useAuthStore.getState();
+      const match = registeredUsers.find(u => {
+        const a = (u.phone || '').toString().trim().slice(-10);
+        const b = (selectedAdmin.phone || '').toString().trim().slice(-10);
+        return a === b;
+      });
+      if (match) av(match.id, true);
+    }
 
     addNotification({
       title: "✅ Admin Request Approved",

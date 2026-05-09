@@ -91,7 +91,8 @@ export default function AdminProfileScreen({ navigation }) {
           onPress={() => confirmAlert('Logout', 'Log out?', logout, {
             confirmLabel: 'Logout',
             destructive: true,
-          })}>          <Ionicons name="log-out-outline" size={20} color={P.danger} />
+          })}>
+          <Ionicons name="log-out-outline" size={20} color={P.danger} />
           <Text style={s.logoutText}>Logout</Text>
         </TouchableOpacity>
         <View style={{ height: 40 }} />

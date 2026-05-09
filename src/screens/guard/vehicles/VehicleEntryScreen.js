@@ -9,8 +9,8 @@ import {
   StatusBar,
   TextInput,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
+import { infoAlert } from '../../../components/common/crossPlatformAlert';
 
 export default function VehicleEntryScreen({ navigation }) {
   const theme = useTheme();
@@ -51,23 +51,23 @@ export default function VehicleEntryScreen({ navigation }) {
 
   const validateForm = () => {
     if (!vehicleNumber.trim()) {
-      Alert.alert('Validation', 'Enter vehicle number');
+      infoAlert('Validation', 'Enter vehicle number');
       return false;
     }
     if (!ownerName.trim()) {
-      Alert.alert('Validation', 'Enter owner name');
+      infoAlert('Validation', 'Enter owner name');
       return false;
     }
     if (!flatNumber.trim()) {
-      Alert.alert('Validation', 'Enter flat number');
+      infoAlert('Validation', 'Enter flat number');
       return false;
     }
     if (!vehicleType.trim()) {
-      Alert.alert('Validation', 'Enter vehicle type');
+      infoAlert('Validation', 'Enter vehicle type');
       return false;
     }
     if (!purpose.trim()) {
-      Alert.alert('Validation', 'Enter purpose');
+      infoAlert('Validation', 'Enter purpose');
       return false;
     }
     return true;
@@ -105,7 +105,7 @@ export default function VehicleEntryScreen({ navigation }) {
     setPurpose('');
     setParkingSlot('');
 
-    Alert.alert('Success', 'Vehicle entry added successfully');
+    infoAlert('Success', 'Vehicle entry added successfully');
   };
 
   const handleMarkExit = (id) => {
@@ -120,7 +120,7 @@ export default function VehicleEntryScreen({ navigation }) {
           : item
       )
     );
-    Alert.alert('Updated', 'Vehicle marked as exited');
+    infoAlert('Updated', 'Vehicle marked as exited');
   };
 
   const filteredLogs = useMemo(() => {

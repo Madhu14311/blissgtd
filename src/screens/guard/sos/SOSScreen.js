@@ -15,11 +15,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar,
-  ScrollView, Alert, Animated, TextInput, Modal,
+  ScrollView, Animated, TextInput, Modal,
 } from 'react-native';
 import { useAuthStore }     from '../../../store/AuthStore';
 import { useSecurityStore } from '../../../store/securityStore';
 import { useTheme } from '../../../hooks/useTheme';
+import { infoAlert } from '../../../components/common/crossPlatformAlert';
 
 // ─── Status Config ────────────────────────────────────────────────────────────
 const STATUS_META = {
@@ -189,12 +190,12 @@ export default function SOSScreen({ navigation }) {
 
   const handleAcknowledge = (id) => {
     acknowledgeSOS(id, guardId, guardName);
-    Alert.alert('Acknowledged', 'You have acknowledged this SOS. Please respond immediately.');
+    infoAlert('Acknowledged', 'You have acknowledged this SOS. Please respond immediately.');
   };
 
   const handleRespond = (id) => {
     respondSOS(id, guardId, guardName);
-    Alert.alert('Status Updated', 'Marked as In Progress. Please resolve once situation is handled.');
+    infoAlert('Status Updated', 'Marked as In Progress. Please resolve once situation is handled.');
   };
 
   const handleResolve = (sos) => {
@@ -204,7 +205,7 @@ export default function SOSScreen({ navigation }) {
   const confirmResolve = (note) => {
     resolveSOS(resolveTarget.id, guardId, guardName, note);
     setResolveTarget(null);
-    Alert.alert('✅ Resolved', 'SOS has been marked as resolved.');
+    infoAlert('✅ Resolved', 'SOS has been marked as resolved.');
   };
 
   return (

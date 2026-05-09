@@ -30,7 +30,7 @@ const SEED_USERS = {
   resident:   { id: 'res1',        name: 'John Resident', phone: '9876543210', role: 'resident',   approvalStatus: 'approved', verificationStatus: 'approved', token: 'token-resident-demo' },
   admin:      { id: 'admin1',      name: 'Admin User',    phone: '9000000001', role: 'admin',      approvalStatus: 'approved', verificationStatus: 'approved', token: 'token-admin-demo' },
   superadmin: { id: 'superadmin1', name: 'Super Admin',   phone: '9000000000', role: 'superadmin', approvalStatus: 'approved', verificationStatus: 'approved', token: 'token-superadmin-demo' },
-  vendor:     { id: 'ven1',        name: 'Bob Vendor',    phone: '8765432100', role: 'vendor',     approvalStatus: 'approved', verificationStatus: 'approved', token: 'token-vendor-demo', company: 'Fix-It Pro', vendorType: 'business' },
+  vendor:     { id: 'ven1',        name: 'Bob Vendor',    phone: '8765432100', role: 'vendor',     approvalStatus: 'approved', verificationStatus: 'approved', token: 'token-vendor-demo', company: 'Fix-It Pro' },
   security:   { id: 'sec1',        name: 'Sam Security',  phone: '7654321000', role: 'security',   approvalStatus: 'approved', verificationStatus: 'approved', token: 'token-security-demo' },
   builder:    { id: 'bld1',        name: 'Builder Corp',  phone: '9988776655', role: 'builder',    approvalStatus: 'approved', verificationStatus: 'approved', token: null },
   customer:   { id: 'cust1',       name: 'Demo Customer', phone: '9000001111', role: 'customer',   approvalStatus: 'approved', verificationStatus: 'approved', verified: true, token: 'token-customer-demo' },
@@ -262,7 +262,7 @@ export const useAuthStore = create(
         }),
     }),
     {
-      name: 'bs-auth-v6',
+      name: 'bs-auth-v7',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         user:                state.user,

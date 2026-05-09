@@ -14,12 +14,13 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, StatusBar, Alert, Switch,
+  StyleSheet, SafeAreaView, StatusBar, Switch,
 } from 'react-native';
 import { Colors, Fonts, Radius } from '../../../vendor/theme';
 import { AppHeader, Card, Divider } from '../../../vendor/components';
 import { MarketplaceTabBar } from '../../../vendor/components/TabBars';
 import { useAuthStore } from '../../../store/AuthStore';
+import { confirmAlert, infoAlert } from '../../../components/common/crossPlatformAlert';
 import { useTheme } from '../../../hooks/useTheme';
 
 // ── Verify Card ───────────────────────────────────────────────────────────────
@@ -112,10 +113,10 @@ export default function MarketplaceProfileScreen({ navigation }) {
   const [vacation, setVacation] = useState(false);
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: logout },
-    ]);
+    confirmAlert('Logout', 'Are you sure you want to logout?', logout, {
+      confirmLabel: 'Logout',
+      destructive: true,
+    });
   };
 
   return (
@@ -165,8 +166,8 @@ export default function MarketplaceProfileScreen({ navigation }) {
         {/* Account */}
         <SectionLabel title="👤 Account" />
         <Card style={s.menuCard}>
-          <MenuRow emoji="❓" label="Help & Support"  sub="FAQs, contact support"   onPress={() => Alert.alert('Help', 'Support coming soon.')} />
-          <MenuRow emoji="⭐" label="Rate the App"    sub="Share your feedback"      onPress={() => Alert.alert('Thanks!', 'Rating feature coming soon.')} last />
+          <MenuRow emoji="❓" label="Help & Support"  sub="FAQs, contact support"   onPress={() => infoAlert('Help & Support', 'Support coming soon.')} />
+          <MenuRow emoji="⭐" label="Rate the App"    sub="Share your feedback"      onPress={() => infoAlert('Rate the App', 'Rating feature coming soon.')} last />
         </Card>
 
         {/* Logout */}

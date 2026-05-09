@@ -10,11 +10,12 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar,
-  TextInput, ScrollView, Alert, Modal,
+  TextInput, ScrollView, Modal,
 } from 'react-native';
 import { useAuthStore }     from '../../../store/AuthStore';
 import { useSecurityStore } from '../../../store/securityStore';
 import { useTheme } from '../../../hooks/useTheme';
+import { infoAlert } from '../../../components/common/crossPlatformAlert';
 
 const PURPOSES = ['Guest', 'Delivery', 'Service', 'Maintenance', 'Official Work', 'Cab / Taxi', 'Other'];
 
@@ -91,29 +92,28 @@ export default function WalkInEntryScreen({ navigation }) {
   const [form, setForm] = useState({ name: '', phone: '', purpose: 'Guest', hostUnit: '', hostResidentId: '', hostResidentName: '' });
 
   const handleAdd = () => {
-    if (!form.name.trim())    { Alert.alert('Required', 'Enter visitor name'); return; }
-    if (!form.phone.trim())   { Alert.alert('Required', 'Enter phone number'); return; }
-    if (!form.hostUnit.trim()){ Alert.alert('Required', 'Enter host unit'); return; }
+    if (!form.name.trim())    { infoAlert('Required', 'Enter visitor name'); return; }
+    if (!form.phone.trim())   { infoAlert('Required', 'Enter phone number'); return; }
+    if (!form.hostUnit.trim()){ infoAlert('Required', 'Enter host unit'); return; }
 
     const bl = checkBlacklist(form.name, form.phone);
     if (bl) {
-      Alert.alert('🚫 BLACKLISTED', `${form.name} is on the society blacklist.\n\nReason: ${bl.reason}\n\nEntry NOT allowed.`);
+      infoAlert('🚫 BLACKLISTED', `${form.name} is on the society blacklist.\n\nReason: ${bl.reason}\n\nEntry NOT allowed.`);
       return;
     }
 
     addToQueue({ ...form, hostResidentName: form.hostResidentName || `Resident of ${form.hostUnit}` }, guardId);
     setForm({ name: '', phone: '', purpose: 'Guest', hostUnit: '', hostResidentId: '', hostResidentName: '' });
     setShowForm(false);
-    Alert.alert('Added to Queue', `${form.name} added. Call the resident to get approval.`);
+    infoAlert('Added to Queue', `${form.name} added. Call the resident to get approval.`);
   };
 
   const handleCall = (id) => {
     // callResident updates queue status AND re-sends a reminder notification to the resident
     callResident(id);
-    Alert.alert(
+    infoAlert(
       '📲 Reminder Sent',
       'A reminder notification has been sent to the resident.\n\nYou will be notified on your Notifications tab once they respond.',
-      [{ text: 'OK' }]
     );
   };
 

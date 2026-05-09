@@ -9,11 +9,11 @@
 import React, { useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
-  StatusBar, ScrollView, Alert, Platform,
+  StatusBar, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore }     from '../../../store/AuthStore';
-import { confirmAlert } from '../../../components/common/crossPlatformAlert';
+import { confirmAlert, infoAlert } from '../../../components/common/crossPlatformAlert';
 import { useSecurityStore } from '../../../store/securityStore';
 import PendingVerificationBanner from '../../../components/common/PendingVerificationBanner';
 
@@ -141,22 +141,22 @@ export default function GuardProfileScreen({ navigation }) {
   const myHandovers = handoverLogs.filter(l => l.guardId === user?.id || l.outgoingGuard === user?.name);
 
   const handleLogout = () => {
-    if (Platform.OS === 'web') {
-      const doHandover = window.confirm(
-        'End Shift & Logout\n\nWould you like to do a shift handover first?\n\nOK = Do Handover First   |   Cancel = Skip & Logout'
-      );
-      if (doHandover) {
-        navigation.navigate('ShiftHandover');
-      } else {
-        logout();
+    // Ask if they want to do a handover first; if they decline, confirm logout
+    confirmAlert(
+      'End Shift & Logout',
+      'Would you like to submit a shift handover before logging out?',
+      () => navigation.navigate('ShiftHandover'),
+      {
+        confirmLabel: 'Do Handover First',
+        onCancel: () =>
+          confirmAlert(
+            'Skip Handover & Logout',
+            'Are you sure you want to logout without a handover?',
+            logout,
+            { confirmLabel: 'Logout' }
+          ),
       }
-      return;
-    }
-    Alert.alert('End Shift & Logout', 'Submit a shift handover before logging out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Skip & Logout', style: 'destructive', onPress: logout },
-      { text: 'Do Handover First', onPress: () => navigation.navigate('ShiftHandover') },
-    ]);
+    );
   };
 
   return (
@@ -255,7 +255,7 @@ export default function GuardProfileScreen({ navigation }) {
                   style={[s.menuRow, i < section.items.length - 1 && s.menuBorder]}
                   onPress={() => item.screen
                     ? navigation.navigate(item.screen)
-                    : Alert.alert(item.label, 'Coming soon')}
+                    : infoAlert(item.label, 'Coming soon')}
                   activeOpacity={0.8}
                 >
                   <Text style={s.menuEmoji}>{item.emoji}</Text>

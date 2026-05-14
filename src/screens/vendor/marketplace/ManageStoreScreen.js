@@ -7,6 +7,7 @@ import { Colors, Fonts, Radius, Shadows } from '../../../vendor/theme';
 import { AppHeader, Card, PrimaryButton, Divider, Badge, Avatar, SectionTitle, TabChip } from '../../../vendor/components';
 import { MarketplaceTabBar } from '../../../vendor/components/TabBars';
 import useAppStore from '../../../store/appStore';
+import { useAuthStore } from '../../../store/AuthStore';
 import { useTheme } from '../../../hooks/useTheme';
 
 const EMOJIS = ['🍚','🫙','🫘','🌾','🍬','🧂','🧈','🥛','🥚','🧅','🍅','🥦','🧃','🍫','🫐','📦'];
@@ -15,6 +16,9 @@ const EMOJIS = ['🍚','🫙','🫘','🌾','🍬','🧂','🧈','🥛','🥚','
 
 export default function ManageStoreScreen({ navigation }) {
   const theme = useTheme();
+  const vendorId = useAuthStore(s => s.user?.id) || 'ven1';
+  const vendorName = useAuthStore(s => s.user?.name) || 'My Store';
+  const store = useAppStore(s => s.getVendorStore(vendorId));
   const MENU = [
     { emoji: '👤', label: 'Store Profile',         sub: 'Name, category, address',        screen: 'StoreProfile'      },
     { emoji: '🚚', label: 'Delivery Settings',      sub: 'Modes, charges, radius',         screen: 'DeliverySettings'  },
@@ -37,8 +41,8 @@ export default function ManageStoreScreen({ navigation }) {
             <Text style={{ fontSize: 30 }}>🏪</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.customerName}>Fresh Mart</Text>
-            <Text style={s.customerLoc}>Grocery Store · Active</Text>
+            <Text style={s.customerName}>{store?.storeName || vendorName}</Text>
+            <Text style={s.customerLoc}>{store?.category || 'Marketplace Store'} · {store?.isActive === false ? 'Paused' : 'Active'}</Text>
           </View>
           <TouchableOpacity
             style={[s.uploadBtn, { backgroundColor: Colors.tealLight }]}

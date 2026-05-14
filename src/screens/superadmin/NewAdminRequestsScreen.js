@@ -318,13 +318,21 @@ export default function NewAdminRequestScreen({ navigation }) {
     fetchSuperAdminPending();
   }, []);
 
-  const handleApprove = (item) => {
-    approveVerification(item.id, true);
+  const handleApprove = async (item) => {
+    const result = await approveVerification(item.id, true);
+    if (!result?.success) {
+      Alert.alert('Approval Failed', result?.message || 'Could not approve this user.');
+      return;
+    }
     Alert.alert('Approved', `${item.name} is approved as admin.`);
   };
 
-  const handleReject = (item) => {
-    approveVerification(item.id, false);
+  const handleReject = async (item) => {
+    const result = await approveVerification(item.id, false);
+    if (!result?.success) {
+      Alert.alert('Reject Failed', result?.message || 'Could not reject this user.');
+      return;
+    }
     Alert.alert('Rejected', `${item.name} admin request rejected.`);
   };
 

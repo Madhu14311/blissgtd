@@ -4,6 +4,8 @@ import {
   SafeAreaView, Alert, Modal, TextInput, ScrollView,
 } from 'react-native';
 import useAdminStore from '../../../store/adminStore';
+import { useAuthStore } from '../../../store/AuthStore';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, globalStyles } from '../../../components/common/theme';
 import { useTheme } from '../../../hooks/useTheme';
 
@@ -12,9 +14,27 @@ const GATES  = ['Main Gate', 'Side Gate', 'Back Gate'];
 
 export default function GuardManagementScreen() {
   const theme = useTheme();
-  const guards            = useAdminStore((s) => s.guards);
+  const guardsSeed        = useAdminStore((s) => s.guards);
   const addGuard          = useAdminStore((s) => s.addGuard);
   const toggleGuardActive = useAdminStore((s) => s.toggleGuardActive);
+  const registeredUsers   = useAuthStore((s) => s.registeredUsers);
+  const fetchPendingUsers = useAuthStore((s) => s.fetchPendingUsers);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchPendingUsers?.();
+    }, [fetchPendingUsers])
+  );
+  const guardsFromApi = (registeredUsers || []).filter((u) => {
+    const role = String(u.role || '').toLowerCase();
+    return role === 'security' || role === 'guard';
+  }).map((u) => ({
+    ...u,
+    phone: u.phone || '-',
+    shift: u.shift || 'General',
+    gate: u.gate || 'Main Gate',
+    active: (u.status || '').toLowerCase() === 'active' && (u.verificationStatus || '').toLowerCase() === 'approved',
+  }));
+  const guards = guardsFromApi.length > 0 ? guardsFromApi : (guardsSeed || []);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [name,  setName]  = useState('');

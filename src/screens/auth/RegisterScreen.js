@@ -54,6 +54,7 @@ export default function RegisterScreen({ navigation }) {
   const [password,        setPassword]        = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role,            setRole]            = useState('Resident');
+  const [vendorType,      setVendorType]      = useState('marketplace');
   const [showPw,          setShowPw]          = useState(false);
 
   const handleSendOtp = async () => {
@@ -111,6 +112,10 @@ export default function RegisterScreen({ navigation }) {
       Alert.alert('Weak Password', 'Password must be at least 6 characters long.'); 
       return; 
     }
+    if (roleKey === 'vendor' && !vendorType) {
+      Alert.alert('Select Type', 'Please choose Business or Marketplace for vendor registration.');
+      return;
+    }
     if (password !== confirmPassword) { 
       Alert.alert('Mismatch', 'Passwords do not match.'); 
       return; 
@@ -124,6 +129,9 @@ export default function RegisterScreen({ navigation }) {
       phone: phone.trim(),
       password,
       role: roleKey,
+      vendorType: roleKey === 'vendor' ? vendorType : null,
+      businessType: roleKey === 'vendor' && vendorType === 'business' ? 'business' : null,
+      marketplaceType: roleKey === 'vendor' && vendorType === 'marketplace' ? 'marketplace' : null,
     });
 
     if (result.success) {
@@ -173,6 +181,25 @@ export default function RegisterScreen({ navigation }) {
                 </TouchableOpacity>
               ))}
             </View>
+            {role === 'Vendor' && (
+              <>
+                <Text style={rs.label}>Vendor Type *</Text>
+                <View style={rs.roleGrid}>
+                  {[
+                    { key: 'business', label: 'Business (Services)' },
+                    { key: 'marketplace', label: 'Marketplace (Store)' },
+                  ].map((v) => (
+                    <TouchableOpacity
+                      key={v.key}
+                      style={[rs.roleChip, vendorType === v.key && rs.roleChipActive]}
+                      onPress={() => setVendorType(v.key)}
+                    >
+                      <Text style={[rs.roleChipText, vendorType === v.key && { color: '#FFF' }]}>{v.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
 
             {/* Full Name */}
             <Text style={rs.label}>Full Name *</Text>

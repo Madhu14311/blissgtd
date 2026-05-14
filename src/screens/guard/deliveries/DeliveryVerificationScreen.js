@@ -12,15 +12,29 @@
  *   - Shows all delivery passes pending + in-progress
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar,
-  TextInput, ScrollView, Alert, Modal, FlatList,
+  Alert,
+  FlatList,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useAuthStore }     from '../../../store/AuthStore';
+import { useAuthStore } from '../../../store/AuthStore';
 import { useSecurityStore } from '../../../store/securityStore';
-import useAppStore          from '../../../store/appStore';
+import useAppStore from '../../../store/appStore';
 import { useTheme } from '../../../hooks/useTheme';
+import {
+  fetchPendingDeliveries,
+  verifyDeliveryOtp,
+  markDeliveryDelivered,
+} from '../../../services/deliveryApi';
 
 // ─── Mode Toggle ──────────────────────────────────────────────────────────────
 function ModeToggle({ mode, onChange }) {
@@ -43,11 +57,11 @@ function ModeToggle({ mode, onChange }) {
 
 // ─── Delivery Status Badge ────────────────────────────────────────────────────
 const STATUS_META = {
-  PENDING:      { label: 'Pending',      color: '#E65100', bg: '#FEF3C7' },
+  PENDING: { label: 'Pending', color: '#E65100', bg: '#FEF3C7' },
   OTP_VERIFIED: { label: 'OTP Verified', color: '#1A7A7A', bg: '#CCFBF1' },
-  CHECKED_IN:   { label: 'Inside',       color: '#1A7A7A', bg: '#DBEAFE' },
-  DELIVERED:    { label: 'Delivered',    color: '#064E3B', bg: '#D1FAE5' },
-  CHECKED_OUT:  { label: 'Checked Out',  color: '#7A9E9E', bg: '#F1F5F9' },
+  CHECKED_IN: { label: 'Inside', color: '#1A7A7A', bg: '#DBEAFE' },
+  DELIVERED: { label: 'Delivered', color: '#064E3B', bg: '#D1FAE5' },
+  CHECKED_OUT: { label: 'Checked Out', color: '#7A9E9E', bg: '#F1F5F9' },
 };
 
 function DeliveryCard({ delivery, onMarkDelivered }) {
@@ -117,7 +131,10 @@ function QRScanSimulator({ deliveries, onScan, onClose }) {
             keyExtractor={i => i.id}
             style={{ maxHeight: 220 }}
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.qrItem} onPress={() => onScan(item.qrCode)}>
+              <TouchableOpacity
+                style={styles.qrItem}
+                onPress={() => onScan(item.qrCode || `DELIVERY|${item.id}|${item.otp || ''}`)}
+              >
                 <Text style={styles.qrItemName}>{item.provider} · {item.deliveryPersonName}</Text>
                 <Text style={styles.qrItemSub}>For {item.hostUnit}</Text>
               </TouchableOpacity>
@@ -133,7 +150,7 @@ function QRScanSimulator({ deliveries, onScan, onClose }) {
 // ─── Marketplace Delivery Section ────────────────────────────────────────────
 function MarketplaceDeliverySection() {
   const marketplaceOrders = useAppStore(s => s.marketplaceOrders);
-  const verifyOrderOTP    = useAppStore(s => s.verifyOrderOTP);
+  const verifyOrderOTP = useAppStore(s => s.verifyOrderOTP);
 
   // Guard sees orders in 'assigned_delivery' status — partner assigned, waiting at gate for OTP
   // After guard verifies OTP, verifyOrderOTP() moves them to out_for_delivery + otpVerified=true
@@ -146,7 +163,7 @@ function MarketplaceDeliverySection() {
   );
 
   const [otpInputs, setOtpInputs] = useState({});
-  const [results,   setResults]   = useState({});
+  const [results, setResults] = useState({});
 
   const handleVerify = (order) => {
     const otp = (otpInputs[order.id] || '').trim();
@@ -287,84 +304,226 @@ function MarketplaceDeliverySection() {
 export default function DeliveryVerificationScreen({ navigation }) {
   const theme = useTheme();
   const user = useAuthStore(s => s.user);
+  const setStoreDeliveries = useSecurityStore(s => s.setDeliveries);
+  const logEntry = useSecurityStore(s => s.logEntry);
 
-  const deliveries         = useSecurityStore(s => s.deliveries);
-  const verifyDeliveryOTP  = useSecurityStore(s => s.verifyDeliveryOTP);
-  const verifyDeliveryQR   = useSecurityStore(s => s.verifyDeliveryQR);
-  const markDelivered      = useSecurityStore(s => s.markDelivered);
-  const checkBlacklist     = useSecurityStore(s => s.checkBlacklist);
+  // Backend-driven state
+  const [deliveries, setDeliveries] = useState([]);
+  const [loadingDeliveries, setLoadingDeliveries] = useState(true);
+
+  useEffect(() => {
+    fetchPendingDeliveries()
+      .then(result => {
+        if (result.ok) {
+          const normalized = (result.data || []).map(d => ({
+            ...d,
+            status: (d.status || '').toUpperCase(),
+          }));
+          setDeliveries(normalized);
+          setStoreDeliveries(normalized);
+        }
+      })
+      .finally(() => setLoadingDeliveries(false));
+  }, [setStoreDeliveries]);
+  // const deliveries = useSecurityStore(s => s.deliveries);
+  // const verifyDeliveryOTP = useSecurityStore(s => s.verifyDeliveryOTP);
+  // const verifyDeliveryQR = useSecurityStore(s => s.verifyDeliveryQR);
+  // const markDelivered = useSecurityStore(s => s.markDelivered);
+  const checkBlacklist = useSecurityStore(s => s.checkBlacklist);
 
   // Marketplace pending count for badge — orders waiting at gate for OTP
-  const marketplaceOrders  = useAppStore(s => s.marketplaceOrders);
-  const pendingMktCount    = marketplaceOrders.filter(
+  const marketplaceOrders = useAppStore(s => s.marketplaceOrders);
+  const pendingMktCount = marketplaceOrders.filter(
     o => o.status === 'assigned_delivery'
   ).length;
 
-  const [mode, setMode]       = useState('otp');
+  const [mode, setMode] = useState('otp');
   const [otpInput, setOtpInput] = useState('');
   const [otpInputs, setOtpInputs] = useState({});  // per-job OTP for maintenance tab
-  const [result, setResult]   = useState(null);  // { ok, delivery, error }
-  const [showQR, setShowQR]   = useState(false);
-  const [tab, setTab]         = useState('verify'); // 'verify' | 'all' | 'marketplace' | 'maintenance'
+  const [result, setResult] = useState(null);  // { ok, delivery, error }
+  const [showQR, setShowQR] = useState(false);
+  const [tab, setTab] = useState('verify'); // 'verify' | 'all' | 'marketplace' | 'maintenance'
 
-  const maintenanceRequests         = useAppStore(s => s.maintenanceRequests);
+  const maintenanceRequests = useAppStore(s => s.maintenanceRequests);
   const guardValidateMaintenanceOTP = useAppStore(s => s.guardValidateMaintenanceOTP);
   const pendingMaintenanceJobs = maintenanceRequests.filter(r => r.status === 'approved_to_start');
-  const activeMaintenanceJobs  = maintenanceRequests.filter(r => r.status === 'work_in_progress');
+  const activeMaintenanceJobs = maintenanceRequests.filter(r => r.status === 'work_in_progress');
   const maintenancePendingCount = pendingMaintenanceJobs.length;
 
   const guardId = user?.id || 'sec1';
 
   const pendingDeliveries = deliveries.filter(d => d.status === 'PENDING');
-  const activeDeliveries  = deliveries.filter(d => ['OTP_VERIFIED', 'CHECKED_IN'].includes(d.status));
+  const activeDeliveries = deliveries.filter(d => ['OTP_VERIFIED', 'CHECKED_IN'].includes(d.status));
 
-  const handleOTPVerify = () => {
+  // REPLACE entire handleOTPVerify:
+  const handleOTPVerify = async () => {
     const otp = otpInput.trim();
-    if (otp.length < 4) { Alert.alert('Invalid OTP', 'Please enter the delivery OTP'); return; }
+    if (otp.length < 4) {
+      Alert.alert('Invalid OTP', 'Please enter the delivery OTP');
+      return;
+    }
 
-    const res = verifyDeliveryOTP(otp, guardId);
+    const res = await verifyDeliveryOtp(otp, guardId);
     if (!res.ok) {
-      setResult({ ok: false, error: 'No pending delivery found with this OTP. It may already be verified or expired.' });
+      setResult({
+        ok: false,
+        error: res.error || 'No pending delivery found with this OTP.',
+      });
       return;
     }
 
-    const bl = checkBlacklist(res.delivery.deliveryPersonName, res.delivery.deliveryPersonPhone);
+    // Check blacklist (still uses local store — no change needed)
+    const bl = checkBlacklist(
+      res.data.deliveryPersonName,
+      res.data.deliveryPersonPhone
+    );
     if (bl) {
-      Alert.alert('🚫 BLACKLISTED', `${res.delivery.deliveryPersonName} is on the blacklist.\n\nReason: ${bl.reason}`);
+      Alert.alert(
+        '🚫 BLACKLISTED',
+        `${res.data.deliveryPersonName} is on the blacklist.\n\nReason: ${bl.reason}`
+      );
       return;
     }
 
-    setResult({ ok: true, delivery: res.delivery });
-    setOtpInput('');
-    Alert.alert('✅ Delivery Verified', `${res.delivery.provider} delivery for ${res.delivery.hostUnit} has been allowed entry.`);
-  };
+    // Update screen + global store so dashboard counts stay in sync
+    const nextDeliveries = deliveries.map(d =>
+      String(d.id) === String(res.data.id) ? { ...d, status: 'OTP_VERIFIED' } : d
+    );
+    setDeliveries(nextDeliveries);
+    setStoreDeliveries(nextDeliveries);
+    logEntry(
+      'DELIVERY',
+      res.data.id,
+      res.data.deliveryPersonName || res.data.provider || 'Delivery',
+      res.data.hostUnit || '-',
+      'OTP_VERIFIED',
+      'Main Gate',
+      guardId,
+      {
+        hostResidentId: res.data.hostResidentId || '',
+        hostResidentName: res.data.hostResidentName || '',
+        provider: res.data.provider || '',
+      }
+    );
 
-  const handleQRScan = (qrData) => {
+    setResult({ ok: true, delivery: res.data });
+    setOtpInput('');
+    Alert.alert(
+      '✅ Delivery Verified',
+      `${res.data.provider} delivery for ${res.data.hostUnit} has been allowed entry.`
+    );
+  };
+  // const handleOTPVerify = () => {
+  //   const otp = otpInput.trim();
+  //   if (otp.length < 4) { Alert.alert('Invalid OTP', 'Please enter the delivery OTP'); return; }
+
+  //   const res = verifyDeliveryOTP(otp, guardId);
+  //   if (!res.ok) {
+  //     setResult({ ok: false, error: 'No pending delivery found with this OTP. It may already be verified or expired.' });
+  //     return;
+  //   }
+
+  //   const bl = checkBlacklist(res.data.deliveryPersonName, res.data.deliveryPersonPhone);
+  //   if (bl) {
+  //     Alert.alert('🚫 BLACKLISTED', `${res.data.deliveryPersonName} is on the blacklist.\n\nReason: ${bl.reason}`);
+  //     return;
+  //   }
+
+  //   setResult({ ok: true, delivery: res.data });
+  //   setOtpInput('');
+  //   Alert.alert('✅ Delivery Verified', `${res.data.provider} delivery for ${res.data.hostUnit} has been allowed entry.`);
+  // };
+
+    const handleQRScan = async (qrData) => {
     setShowQR(false);
-    const res = verifyDeliveryQR(qrData, guardId);
+    const qrText = String(qrData || '');
+    const parts = qrText.split('|');
+    const otp = parts[0] === 'DELIVERY' ? parts[2] : qrText;
+    const res = await verifyDeliveryOtp(otp, guardId);
     if (!res.ok) {
       setResult({ ok: false, error: 'Invalid QR code. Delivery not found or already processed.' });
       return;
     }
-    const bl = checkBlacklist(res.delivery.deliveryPersonName, res.delivery.deliveryPersonPhone);
+    const bl = checkBlacklist(res.data.deliveryPersonName, res.data.deliveryPersonPhone);
     if (bl) {
-      Alert.alert('🚫 BLACKLISTED', `${res.delivery.deliveryPersonName} is on the blacklist.`);
+      Alert.alert('BLACKLISTED', `${res.data.deliveryPersonName} is on the blacklist.`);
       return;
     }
-    setResult({ ok: true, delivery: res.delivery });
-    Alert.alert('✅ QR Verified', `Delivery for ${res.delivery.hostUnit} allowed entry.`);
+    const nextDeliveries = deliveries.map(d =>
+      String(d.id) === String(res.data.id) ? { ...d, status: 'OTP_VERIFIED' } : d
+    );
+    setDeliveries(nextDeliveries);
+    setStoreDeliveries(nextDeliveries);
+    logEntry(
+      'DELIVERY',
+      res.data.id,
+      res.data.deliveryPersonName || res.data.provider || 'Delivery',
+      res.data.hostUnit || '-',
+      'QR_VERIFIED',
+      'Main Gate',
+      guardId,
+      {
+        hostResidentId: res.data.hostResidentId || '',
+        hostResidentName: res.data.hostResidentName || '',
+        provider: res.data.provider || '',
+      }
+    );
+    setResult({ ok: true, delivery: res.data });
+    Alert.alert('QR Verified', `Delivery for ${res.data.hostUnit} allowed entry.`);
   };
 
-  const handleMarkDelivered = (delivery) => {
-    Alert.alert('Mark Delivered', `Confirm ${delivery.provider} delivery to ${delivery.hostUnit} is complete and person has exited?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Confirm', onPress: () => {
-        markDelivered(delivery.id, guardId);
-        setResult(null);
-        Alert.alert('✅ Done', 'Delivery marked complete. Person checked out.');
-      }},
-    ]);
+  // REPLACE entire handleMarkDelivered:
+    const handleMarkDelivered = (delivery) => {
+    Alert.alert(
+      'Mark Delivered',
+      `Confirm ${delivery.provider} delivery to ${delivery.hostUnit} is complete and person has exited?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            const res = await markDeliveryDelivered(delivery.id, guardId);
+            if (!res.ok) {
+              Alert.alert('Error', res.error);
+              return;
+            }
+            const nextDeliveries = deliveries.filter(d => String(d.id) !== String(delivery.id));
+            setDeliveries(nextDeliveries);
+            setStoreDeliveries(nextDeliveries);
+            logEntry(
+              'DELIVERY',
+              delivery.id,
+              delivery.deliveryPersonName || delivery.provider || 'Delivery',
+              delivery.hostUnit || '-',
+              'CHECK_OUT',
+              'Main Gate',
+              guardId,
+              {
+                hostResidentId: delivery.hostResidentId || '',
+                hostResidentName: delivery.hostResidentName || '',
+                provider: delivery.provider || '',
+              }
+            );
+            setResult(null);
+            Alert.alert('Done', 'Delivery marked complete. Person checked out.');
+          },
+        },
+      ]
+    );
   };
+
+  // const handleMarkDelivered = (delivery) => {
+  //   Alert.alert('Mark Delivered', `Confirm ${delivery.provider} delivery to ${delivery.hostUnit} is complete and person has exited?`, [
+  //     { text: 'Cancel', style: 'cancel' },
+  //     {
+  //       text: 'Confirm', onPress: () => {
+  //         markDelivered(delivery.id, guardId);
+  //         setResult(null);
+  //         Alert.alert('✅ Done', 'Delivery marked complete. Person checked out.');
+  //       }
+  //     },
+  //   ]);
+  // };
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.background }]}>
@@ -625,89 +784,92 @@ export default function DeliveryVerificationScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  screen:        { flex: 1, backgroundColor: '#FFFFFF' },
-  header:        { backgroundColor: '#0D6E6E', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, gap: 14 },
-  backBtn:       { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  backText:      { color: '#FFF', fontSize: 24, fontWeight: '300', lineHeight: 28, marginTop: -1 },
-  headerTitle:   { color: '#FFF', fontSize: 18, fontWeight: '900' },
-  headerSub:     { color: 'rgba(255,255,255,0.65)', fontSize: 12, marginTop: 2 },
-  tabBar:        { flexDirection: 'row', backgroundColor: '#1A7A7A', borderTopWidth: 1, borderTopColor: '#2D3F5A' },
-  tabItem:       { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  screen: { flex: 1, backgroundColor: '#FFFFFF' },
+  header: { backgroundColor: '#0D6E6E', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, gap: 14 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  backText: { color: '#FFF', fontSize: 24, fontWeight: '300', lineHeight: 28, marginTop: -1 },
+  headerTitle: { color: '#FFF', fontSize: 18, fontWeight: '900' },
+  headerSub: { color: 'rgba(255,255,255,0.65)', fontSize: 12, marginTop: 2 },
+  tabBar: { flexDirection: 'row', backgroundColor: '#1A7A7A', borderTopWidth: 1, borderTopColor: '#2D3F5A' },
+  tabItem: { flex: 1, paddingVertical: 12, alignItems: 'center' },
   tabItemActive: { borderBottomWidth: 3, borderBottomColor: '#D4AF5A' },
-  tabText:       { color: '#7A9E9E', fontSize: 11, fontWeight: '600' },
+  tabText: { color: '#7A9E9E', fontSize: 11, fontWeight: '600' },
   tabTextActive: { color: '#D4AF5A', fontWeight: '800' },
-  body:          { padding: 16 },
-  sectionLabel:  { fontSize: 11, fontWeight: '800', color: '#7A9E9E', letterSpacing: 1, marginTop: 18, marginBottom: 10 },
+  body: { padding: 16 },
+  sectionLabel: { fontSize: 11, fontWeight: '800', color: '#7A9E9E', letterSpacing: 1, marginTop: 18, marginBottom: 10 },
 
   // Marketplace tab badge
-  mktBadge:     { backgroundColor: '#C62828', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  mktBadge: { backgroundColor: '#C62828', borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   mktBadgeText: { color: '#FFFFFF', fontSize: 9, fontWeight: '800' },
 
   // Marketplace delivery cards
-  mktCard:        { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#D0EEEE' },
-  mktCardHeader:  { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  mktIcon:        { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  mktOrderId:     { fontSize: 14, fontWeight: '800', color: '#1A2E2E' },
-  mktSub:         { fontSize: 12, color: '#64748B', marginTop: 2 },
-  mktDetails:     { backgroundColor: '#E8F5F5', borderRadius: 10, padding: 12, gap: 8, marginBottom: 12 },
+  mktCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#D0EEEE' },
+  mktCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  mktIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  mktOrderId: { fontSize: 14, fontWeight: '800', color: '#1A2E2E' },
+  mktSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  mktDetails: { backgroundColor: '#E8F5F5', borderRadius: 10, padding: 12, gap: 8, marginBottom: 12 },
 
   mandatoryBanner: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, marginBottom: 14, borderLeftWidth: 4, borderLeftColor: '#E65100' },
-  mandatoryText:   { fontSize: 12, fontWeight: '700', color: '#E65100' },
+  mandatoryText: { fontSize: 12, fontWeight: '700', color: '#E65100' },
 
-  modeToggle:    { flexDirection: 'row', backgroundColor: '#D0EEEE', borderRadius: 12, padding: 4, marginBottom: 14 },
-  modeBtn:       { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  modeToggle: { flexDirection: 'row', backgroundColor: '#D0EEEE', borderRadius: 12, padding: 4, marginBottom: 14 },
+  modeBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   modeBtnActive: { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
-  modeBtnText:   { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  modeBtnText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
   modeBtnTextActive: { color: '#1A7A7A', fontWeight: '800' },
 
-  card:        { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#D0EEEE' },
-  cardTitle:   { fontSize: 15, fontWeight: '800', color: '#1A2E2E', marginBottom: 4 },
-  cardSub:     { fontSize: 12, color: '#64748B', marginBottom: 14 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#D0EEEE' },
+  cardTitle: { fontSize: 15, fontWeight: '800', color: '#1A2E2E', marginBottom: 4 },
+  cardSub: { fontSize: 12, color: '#64748B', marginBottom: 14 },
 
-  otpRow:      { flexDirection: 'row', gap: 10 },
-  otpInput:    { flex: 1, backgroundColor: '#E8F5F5', borderWidth: 1.5, borderColor: '#D0EEEE', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 20, fontWeight: '800', color: '#1A2E2E', textAlign: 'center', letterSpacing: 4 },
-  verifyBtn:   { backgroundColor: '#E65100', paddingHorizontal: 20, borderRadius: 12, justifyContent: 'center' },
+  otpRow: { flexDirection: 'row', gap: 10 },
+  otpInput: { flex: 1, backgroundColor: '#E8F5F5', borderWidth: 1.5, borderColor: '#D0EEEE', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 20, fontWeight: '800', color: '#1A2E2E', textAlign: 'center', letterSpacing: 4 },
+  verifyBtn: { backgroundColor: '#E65100', paddingHorizontal: 20, borderRadius: 12, justifyContent: 'center' },
   verifyBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
-  scanBtn:     { backgroundColor: '#E65100', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  scanBtn: { backgroundColor: '#E65100', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   scanBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
   successCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#86EFAC' },
-  successTitle:{ fontSize: 15, fontWeight: '800', color: '#064E3B', marginBottom: 4 },
-  successSub:  { fontSize: 13, color: '#065F46', marginBottom: 4 },
-  errorCard:   { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#FECACA' },
-  errorTitle:  { fontSize: 15, fontWeight: '800', color: '#991B1B', marginBottom: 4 },
-  errorSub:    { fontSize: 13, color: '#C62828' },
+  successTitle: { fontSize: 15, fontWeight: '800', color: '#064E3B', marginBottom: 4 },
+  successSub: { fontSize: 13, color: '#065F46', marginBottom: 4 },
+  errorCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#FECACA' },
+  errorTitle: { fontSize: 15, fontWeight: '800', color: '#991B1B', marginBottom: 4 },
+  errorSub: { fontSize: 13, color: '#C62828' },
 
-  delivCard:       { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#D0EEEE' },
+  delivCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#D0EEEE' },
   delivCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  delivIcon:       { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  delivName:       { fontSize: 15, fontWeight: '800', color: '#1A2E2E' },
-  delivSub:        { fontSize: 12, color: '#64748B', marginTop: 2 },
-  delivBadge:      { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  delivBadgeText:  { fontSize: 11, fontWeight: '800' },
-  delivDetails:    { backgroundColor: '#E8F5F5', borderRadius: 10, padding: 12, gap: 8 },
-  detailRow:       { flexDirection: 'row', justifyContent: 'space-between' },
-  detailLabel:     { fontSize: 12, color: '#64748B', fontWeight: '600' },
-  detailValue:     { fontSize: 12, color: '#1A2E2E', fontWeight: '700', flex: 1, textAlign: 'right' },
-  deliveredBtn:    { marginTop: 12, backgroundColor: '#1A7A7A', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
-  deliveredBtnText:{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  delivIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  delivName: { fontSize: 15, fontWeight: '800', color: '#1A2E2E' },
+  delivSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  delivBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  delivBadgeText: { fontSize: 11, fontWeight: '800' },
+  delivDetails: { backgroundColor: '#E8F5F5', borderRadius: 10, padding: 12, gap: 8 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  detailLabel: { fontSize: 12, color: '#64748B', fontWeight: '600' },
+  detailValue: { fontSize: 12, color: '#1A2E2E', fontWeight: '700', flex: 1, textAlign: 'right' },
+  deliveredBtn: { marginTop: 12, backgroundColor: '#1A7A7A', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
+  deliveredBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
 
-  emptyState:  { alignItems: 'center', padding: 40, gap: 12 },
-  emptyText:   { fontSize: 16, color: '#64748B', fontWeight: '600' },
+  emptyState: { alignItems: 'center', padding: 40, gap: 12 },
+  emptyText: { fontSize: 16, color: '#64748B', fontWeight: '600' },
 
-  qrOverlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  qrModal:     { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' },
-  qrHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  qrTitle:     { fontSize: 18, fontWeight: '800', color: '#1A2E2E' },
-  qrViewfinder:{ backgroundColor: '#000', borderRadius: 16, height: 160, alignItems: 'center', justifyContent: 'center', marginBottom: 16, position: 'relative' },
-  qrC1:  { position: 'absolute', top: 10, left: 10, width: 26, height: 26, borderTopWidth: 3, borderLeftWidth: 3, borderColor: '#D4AF5A' },
-  qrC2:  { position: 'absolute', top: 10, right: 10, width: 26, height: 26, borderTopWidth: 3, borderRightWidth: 3, borderColor: '#D4AF5A' },
-  qrC3:  { position: 'absolute', bottom: 10, left: 10, width: 26, height: 26, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: '#D4AF5A' },
-  qrC4:  { position: 'absolute', bottom: 10, right: 10, width: 26, height: 26, borderBottomWidth: 3, borderRightWidth: 3, borderColor: '#D4AF5A' },
-  qrHint:      { color: '#7A9E9E', fontSize: 13 },
-  qrOrLabel:   { textAlign: 'center', fontSize: 12, color: '#7A9E9E', marginBottom: 10 },
-  qrItem:      { padding: 14, borderRadius: 10, backgroundColor: '#E8F5F5', marginBottom: 8, borderWidth: 1, borderColor: '#D0EEEE' },
-  qrItemName:  { fontSize: 14, fontWeight: '700', color: '#1A2E2E' },
-  qrItemSub:   { fontSize: 12, color: '#64748B', marginTop: 2 },
-  qrEmpty:     { textAlign: 'center', color: '#7A9E9E', padding: 20 },
+  qrOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  qrModal: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' },
+  qrHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  qrTitle: { fontSize: 18, fontWeight: '800', color: '#1A2E2E' },
+  qrViewfinder: { backgroundColor: '#000', borderRadius: 16, height: 160, alignItems: 'center', justifyContent: 'center', marginBottom: 16, position: 'relative' },
+  qrC1: { position: 'absolute', top: 10, left: 10, width: 26, height: 26, borderTopWidth: 3, borderLeftWidth: 3, borderColor: '#D4AF5A' },
+  qrC2: { position: 'absolute', top: 10, right: 10, width: 26, height: 26, borderTopWidth: 3, borderRightWidth: 3, borderColor: '#D4AF5A' },
+  qrC3: { position: 'absolute', bottom: 10, left: 10, width: 26, height: 26, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: '#D4AF5A' },
+  qrC4: { position: 'absolute', bottom: 10, right: 10, width: 26, height: 26, borderBottomWidth: 3, borderRightWidth: 3, borderColor: '#D4AF5A' },
+  qrHint: { color: '#7A9E9E', fontSize: 13 },
+  qrOrLabel: { textAlign: 'center', fontSize: 12, color: '#7A9E9E', marginBottom: 10 },
+  qrItem: { padding: 14, borderRadius: 10, backgroundColor: '#E8F5F5', marginBottom: 8, borderWidth: 1, borderColor: '#D0EEEE' },
+  qrItemName: { fontSize: 14, fontWeight: '700', color: '#1A2E2E' },
+  qrItemSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  qrEmpty: { textAlign: 'center', color: '#7A9E9E', padding: 20 },
 });
+
+
+

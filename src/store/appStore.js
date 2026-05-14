@@ -34,14 +34,14 @@ const uid = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).sl
 
 // ─── Seed: Marketplace Products ───────────────────────────────────────────────
 const SEED_PRODUCTS = [
-  { id: 'p1', name: 'Basmati Rice 1kg',   price: 120, stock: 330, emoji: '🍚', active: true,  category: 'Rice & Grains',    desc: 'Premium long grain Basmati rice, aged 2 years.' },
-  { id: 'p2', name: 'Sunflower Oil 1L',   price: 150, stock: 250, emoji: '🫙', active: true,  category: 'Oils & Ghee',      desc: 'Cold-pressed sunflower oil, 100% pure.' },
-  { id: 'p3', name: 'Toor Dal 1kg',       price: 110, stock: 3,   emoji: '🫘', active: true,  category: 'Lentils & Pulses', desc: 'High-protein split pigeon peas.' },
-  { id: 'p4', name: 'Wheat Flour 1kg',    price: 40,  stock: 180, emoji: '🌾', active: true,  category: 'Flour & Atta',     desc: 'Whole wheat atta, freshly milled.' },
-  { id: 'p5', name: 'Sugar 1kg',          price: 45,  stock: 0,   emoji: '🍬', active: false, category: 'Sugar & Salt',     desc: 'Fine white sugar.' },
-  { id: 'p6', name: 'Salt 1kg',           price: 20,  stock: 220, emoji: '🧂', active: true,  category: 'Sugar & Salt',     desc: 'Iodized table salt.' },
-  { id: 'p7', name: 'Amul Butter 500g',   price: 290, stock: 80,  emoji: '🧈', active: true,  category: 'Dairy',            desc: 'Fresh pasteurized butter.' },
-  { id: 'p8', name: 'Full Cream Milk 1L', price: 68,  stock: 150, emoji: '🥛', active: true,  category: 'Dairy',            desc: 'Fresh full cream milk, homogenized.' },
+  { id: 'p1', name: 'Basmati Rice 1kg',   price: 120, stock: 330, emoji: '🍚', active: true,  category: 'Rice & Grains',    desc: 'Premium long grain Basmati rice, aged 2 years.', vendorId: 'ven1', storeName: 'Fresh Mart' },
+  { id: 'p2', name: 'Sunflower Oil 1L',   price: 150, stock: 250, emoji: '🫙', active: true,  category: 'Oils & Ghee',      desc: 'Cold-pressed sunflower oil, 100% pure.', vendorId: 'ven1', storeName: 'Fresh Mart' },
+  { id: 'p3', name: 'Toor Dal 1kg',       price: 110, stock: 3,   emoji: '🫘', active: true,  category: 'Lentils & Pulses', desc: 'High-protein split pigeon peas.', vendorId: 'ven1', storeName: 'Fresh Mart' },
+  { id: 'p4', name: 'Wheat Flour 1kg',    price: 40,  stock: 180, emoji: '🌾', active: true,  category: 'Flour & Atta',     desc: 'Whole wheat atta, freshly milled.', vendorId: 'ven1', storeName: 'Fresh Mart' },
+  { id: 'p5', name: 'Sugar 1kg',          price: 45,  stock: 0,   emoji: '🍬', active: false, category: 'Sugar & Salt',     desc: 'Fine white sugar.', vendorId: 'ven1', storeName: 'Fresh Mart' },
+  { id: 'p6', name: 'Salt 1kg',           price: 20,  stock: 220, emoji: '🧂', active: true,  category: 'Sugar & Salt',     desc: 'Iodized table salt.', vendorId: 'ven1', storeName: 'Fresh Mart' },
+  { id: 'p7', name: 'Amul Butter 500g',   price: 290, stock: 80,  emoji: '🧈', active: true,  category: 'Dairy',            desc: 'Fresh pasteurized butter.', vendorId: 'ven1', storeName: 'Fresh Mart' },
+  { id: 'p8', name: 'Full Cream Milk 1L', price: 68,  stock: 150, emoji: '🥛', active: true,  category: 'Dairy',            desc: 'Fresh full cream milk, homogenized.', vendorId: 'ven1', storeName: 'Fresh Mart' },
 ];
 
 // ─── Seed: Marketplace Orders ─────────────────────────────────────────────────
@@ -1072,25 +1072,76 @@ const useAppStore = create(
       },
 
       // ── Marketplace (Vendor E-Commerce) ────────────────────────────────────
+      vendorStores: {
+        ven1: {
+          vendorId: 'ven1',
+          storeName: 'Fresh Mart',
+          category: 'Grocery Store',
+          phone: '+91 98765 43210',
+          email: 'freshmart@gmail.com',
+          address: 'Inside Community Marketplace',
+          description: 'Neighborhood grocery and essentials store.',
+          isActive: true,
+          updatedAt: now(),
+        },
+      },
       marketplaceProducts: SEED_PRODUCTS,
       marketplaceOrders:   SEED_ORDERS,
       cart: [],
 
-      addProduct: (data) => {
-        const p = { id: uid('prod'), ...data, active: true, createdAt: now() };
+      upsertVendorStore: (vendorId, payload = {}) =>
+        set(s => {
+          const existing = s.vendorStores[vendorId] || {};
+          return {
+            vendorStores: {
+              ...s.vendorStores,
+              [vendorId]: {
+                vendorId,
+                storeName: payload.storeName || existing.storeName || 'My Store',
+                category: payload.category || existing.category || 'General',
+                phone: payload.phone || existing.phone || '',
+                email: payload.email || existing.email || '',
+                address: payload.address || existing.address || '',
+                description: payload.description || existing.description || '',
+                isActive: payload.isActive ?? existing.isActive ?? true,
+                updatedAt: now(),
+              },
+            },
+          };
+        }),
+
+      getVendorStore: (vendorId) => get().vendorStores[vendorId] || null,
+      getVendorProducts: (vendorId) => get().marketplaceProducts.filter(p => p.vendorId === vendorId),
+      getActiveMarketplaceProducts: () =>
+        get().marketplaceProducts.filter(p => {
+          const store = p.vendorId ? get().vendorStores[p.vendorId] : null;
+          const storeActive = !store || store.isActive !== false;
+          return p.active && p.stock > 0 && storeActive;
+        }),
+
+      addProduct: (data, vendorId = 'ven1', storeName = 'My Store') => {
+        const p = { id: uid('prod'), ...data, vendorId, storeName, active: true, createdAt: now() };
         set(s => ({ marketplaceProducts: [...s.marketplaceProducts, p] }));
         return p;
       },
 
-      updateProduct: (id, updates) =>
+      updateProduct: (id, updates, vendorId = null) =>
         set(s => ({
-          marketplaceProducts: s.marketplaceProducts.map(p => p.id === id ? { ...p, ...updates } : p),
+          marketplaceProducts: s.marketplaceProducts.map(p => {
+            if (p.id !== id) return p;
+            if (vendorId && p.vendorId !== vendorId) return p;
+            return { ...p, ...updates };
+          }),
         })),
 
       // Delete product — removed from store AND resident carts instantly
-      deleteProduct: (id) =>
+      deleteProduct: (id, vendorId = null) =>
         set(s => ({
-          marketplaceProducts: s.marketplaceProducts.filter(p => p.id !== id),
+          marketplaceProducts: s.marketplaceProducts.filter(p => {
+            if (p.id !== id) return true;
+            if (vendorId && p.vendorId !== vendorId) return true;
+            return false;
+          }),
           cart: s.cart.filter(i => i.productId !== id),
         })),
 
@@ -1438,7 +1489,20 @@ const useAppStore = create(
           const existing = s.cart.find(i => i.productId === product.id);
           return existing
             ? { cart: s.cart.map(i => i.productId === product.id ? { ...i, qty: i.qty + qty } : i) }
-            : { cart: [...s.cart, { productId: product.id, name: product.name, price: product.price, emoji: product.emoji, qty }] };
+            : {
+                cart: [
+                  ...s.cart,
+                  {
+                    productId: product.id,
+                    name: product.name,
+                    price: product.price,
+                    emoji: product.emoji,
+                    qty,
+                    vendorId: product.vendorId || null,
+                    storeName: product.storeName || null,
+                  },
+                ],
+              };
         }),
 
       updateCartQty: (productId, qty) =>
@@ -2089,6 +2153,19 @@ const useAppStore = create(
           units:            persistedState.units            || SEED_UNITS,
           bookings:         persistedState.bookings         || SEED_BOOKINGS,
           franchises:       persistedState.franchises       || SEED_FRANCHISES,
+          vendorStores:     persistedState.vendorStores     || {
+            ven1: {
+              vendorId: 'ven1',
+              storeName: 'Fresh Mart',
+              category: 'Grocery Store',
+              phone: '+91 98765 43210',
+              email: 'freshmart@gmail.com',
+              address: 'Inside Community Marketplace',
+              description: 'Neighborhood grocery and essentials store.',
+              isActive: true,
+              updatedAt: now(),
+            },
+          },
           wishlists:        persistedState.wishlists        || {},
           legalNotices:     persistedState.legalNotices     || [],
           expenseApprovals: persistedState.expenseApprovals || [],

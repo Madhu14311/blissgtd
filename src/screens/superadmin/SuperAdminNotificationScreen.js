@@ -159,7 +159,11 @@ export default function SuperAdminNotificationsScreen({ navigation }) {
       Alert.alert('Error', 'User ID missing in notification.');
       return;
     }
-    await approveVerification(item.userId, true);
+    const result = await approveVerification(item.userId, true);
+    if (!result?.success) {
+      Alert.alert('Approval Failed', result?.message || 'Could not approve this user.');
+      return;
+    }
     Alert.alert('Success', 'User approved successfully.');
     // Mark as read
     setNotifications((prev) =>
@@ -172,7 +176,11 @@ export default function SuperAdminNotificationsScreen({ navigation }) {
       Alert.alert('Error', 'User ID missing in notification.');
       return;
     }
-    await approveVerification(item.userId, false);
+    const result = await approveVerification(item.userId, false);
+    if (!result?.success) {
+      Alert.alert('Reject Failed', result?.message || 'Could not reject this user.');
+      return;
+    }
     Alert.alert('Success', 'User request rejected.');
     // Mark as read
     setNotifications((prev) =>

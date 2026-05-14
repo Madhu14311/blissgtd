@@ -15,6 +15,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { requestJson } from '../services/apiClient';
 
 export const DEMO_PENDING_USERS = [
   { id: 'demo-res-001', name: 'Priya Sharma',         phone: '9876500001', password: 'pass123', role: 'resident', flat: 'B-204', block: 'B',               status: 'active', approvalStatus: 'not_submitted', verificationStatus: 'not_submitted', docsSubmitted: false, createdAt: new Date(Date.now() - 2*3600000).toISOString() },
@@ -37,8 +38,6 @@ const SEED_USERS = {
 };
 
 // ─── Backend API Connection ──────────────────────────────────────────
-const API_URL = 'http://192.168.1.5:8080/api'; // Use 10.0.2.2 for Android Emulator, localhost for iOS
-
 export const useAuthStore = create(
   persist(
     (set, get) => ({
@@ -69,12 +68,10 @@ export const useAuthStore = create(
       // ── Twilio OTP Methods ──────────────────────────────────────────────
       sendOtp: async (phoneNumber) => {
         try {
-          const response = await fetch(`${API_URL}/otp/send`, {
+          const { response, data } = await requestJson('/otp/send', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phoneNumber }),
+            body: { phoneNumber },
           });
-          const data = await response.json();
           return { success: response.ok, status: data.status };
         } catch (error) {
           return { success: false, message: 'Network error. check backend' };
@@ -83,12 +80,10 @@ export const useAuthStore = create(
 
       verifyOtp: async (phoneNumber, otp) => {
         try {
-          const response = await fetch(`${API_URL}/otp/verify`, {
+          const { data } = await requestJson('/otp/verify', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phoneNumber, otp }),
+            body: { phoneNumber, otp },
           });
-          const data = await response.json();
           return { success: data.verified, message: data.message };
         } catch (error) {
           return { success: false, message: 'Network error. check backend' };
@@ -98,20 +93,17 @@ export const useAuthStore = create(
       // ── Register — saves user AND auto-logs in → goes to dashboard ────────
       registerUser: async (userData) => {
         try {
-          const response = await fetch(`${API_URL}/auth/register`, {
+          const { response, data } = await requestJson('/auth/register', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(userData),
+            body: userData,
           });
-
-          const data = await response.json();
           if (!response.ok) return { success: false, message: data.message || 'Registration failed' };
 
           const needsSuperAdminApproval = ['admin', 'builder'].includes(data.role);
 
           set({
             user:           data,
-            token:          `token-${data.id}`,
+            token:          data.token,
             role:           data.role,
             approvalStatus: data.approvalStatus,
             isLoggedIn:     true, // Always enter dashboard; restricted tabs handle locked state
@@ -140,15 +132,12 @@ export const useAuthStore = create(
       },
 
       // ── Normal login (returning user) ─────────────────────────────────────
-      loginUser: async (phone, password) => {
+      loginUser: async (phone, password, role) => {
         try {
-          const response = await fetch(`${API_URL}/auth/login`, {
+          const { response, data } = await requestJson('/auth/login', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, password }),
+            body: { phone, password, role },
           });
-
-          const data = await response.json();
           if (!response.ok) return { success: false, status: 'error', message: data.message };
 
           const vs = data.verificationStatus || 'not_submitted';
@@ -156,7 +145,7 @@ export const useAuthStore = create(
           if (vs === 'approved') {
             set({
               user:           data,
-              token:          `token-${data.id}`,
+              token:          data.token,
               role:           data.role,
               approvalStatus: data.approvalStatus,
               isLoggedIn:     true,
@@ -174,12 +163,11 @@ export const useAuthStore = create(
         const uid = userId || get().user?.id;
         if (!uid) return;
         try {
-          const response = await fetch(`${API_URL}/auth/submit-docs/${uid}`, {
+          const { response, data } = await requestJson(`/auth/submit-docs/${uid}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ documents: JSON.stringify(docs) }),
+            token: get().token,
+            body: { documents: JSON.stringify(docs) },
           });
-          const data = await response.json();
           if (response.ok) {
             set(s => ({
               user: (s.user?.id === uid) ? data : s.user,
@@ -205,30 +193,35 @@ export const useAuthStore = create(
       // Called from Admin / SuperAdmin approval screens
       approveVerification: async (userId, approve = true) => {
         try {
-          const response = await fetch(`${API_URL}/admin/approve/${userId}`, {
+          const { response, data } = await requestJson(`/admin/approve/${userId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ approve }),
+            token: get().token,
+            body: { approve },
           });
-
-          const data = await response.json();
-          if (response.ok) {
-            set(s => ({
-              registeredUsers: (s.registeredUsers || []).map(u => u.id === userId ? data : u),
-              superAdminPending: (s.superAdminPending || []).filter(u => u.id !== userId),
-              ...(s.user?.id === userId ? { user: data, approvalStatus: data.approvalStatus } : {}),
-            }));
+          if (!response.ok) {
+            return {
+              success: false,
+              message: data?.message || 'Unable to update verification status.',
+              status: response.status,
+            };
           }
+
+          set(s => ({
+            registeredUsers: (s.registeredUsers || []).map(u => u.id === userId ? data : u),
+            superAdminPending: (s.superAdminPending || []).filter(u => u.id !== userId),
+            ...(s.user?.id === userId ? { user: data, approvalStatus: data.approvalStatus } : {}),
+          }));
+          return { success: true, data };
         } catch (error) {
           console.error('Approve verification error:', error);
+          return { success: false, message: 'Network error. Please check your backend.' };
         }
       },
 
       // Refresh pending users from backend
       fetchSuperAdminPending: async () => {
         try {
-          const response = await fetch(`${API_URL}/admin/superadmin/pending`);
-          const data = await response.json();
+          const { data } = await requestJson('/admin/superadmin/pending', { token: get().token });
           set({ superAdminPending: Array.isArray(data) ? data : [] });
           return Array.isArray(data) ? data : [];
         } catch (error) {
@@ -239,8 +232,7 @@ export const useAuthStore = create(
       },
       fetchPendingUsers: async () => {
         try {
-          const response = await fetch(`${API_URL}/admin/users`);
-          const data = await response.json();
+          const { response, data } = await requestJson('/admin/users', { token: get().token });
           if (response.ok) {
             set({ registeredUsers: data });
           }

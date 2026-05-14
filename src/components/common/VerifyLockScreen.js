@@ -18,6 +18,7 @@ export default function VerifyLockScreen({ navigation, children }) {
     return live?.verificationStatus || s.user?.verificationStatus || 'not_submitted';
   });
   const role = useAuthStore(s => s.user?.role);
+  const logout = useAuthStore(s => s.logout);
 
   // SuperAdmin and Customer never need verification
   if (role === 'superadmin' || role === 'customer') return children;
@@ -46,7 +47,23 @@ export default function VerifyLockScreen({ navigation, children }) {
         {!isPending && (
           <TouchableOpacity
             style={s.btn}
-            onPress={() => navigation.navigate('Profile')}
+            onPress={() => {
+              if (navigation?.getState?.()?.routeNames?.includes('Verification')) {
+                navigation.navigate('Verification');
+                return;
+              }
+              if (navigation?.getState?.()?.routeNames?.includes('GuardProfile')) {
+                navigation.navigate('GuardProfile');
+                return;
+              }
+              if (navigation?.getState?.()?.routeNames?.includes('AdminProfile')) {
+                navigation.navigate('AdminProfile');
+                return;
+              }
+              if (navigation?.getState?.()?.routeNames?.includes('ResidentProfile')) {
+                navigation.navigate('ResidentProfile');
+              }
+            }}
             activeOpacity={0.85}
           >
             <Text style={s.btnText}>Go to Profile → Verify</Text>
@@ -58,6 +75,14 @@ export default function VerifyLockScreen({ navigation, children }) {
             <Text style={s.pendingBadgeText}>⏳ Under Review</Text>
           </View>
         )}
+
+        <TouchableOpacity
+          style={s.logoutBtn}
+          onPress={logout}
+          activeOpacity={0.85}
+        >
+          <Text style={s.logoutBtnText}>Logout</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -93,4 +118,16 @@ const s = StyleSheet.create({
   btnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
   pendingBadge: { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
   pendingBadgeText: { color: '#1D4ED8', fontWeight: '700', fontSize: 14 },
+  logoutBtn: {
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#D1D5DB',
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  logoutBtnText: { color: '#374151', fontWeight: '700', fontSize: 14 },
 });

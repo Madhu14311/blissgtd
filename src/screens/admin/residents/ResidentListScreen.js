@@ -4,6 +4,8 @@ import {
   TextInput, SafeAreaView, StatusBar, Platform,
 } from 'react-native';
 import useAdminStore from '../../../store/adminStore';
+import { useAuthStore } from '../../../store/AuthStore';
+import { useFocusEffect } from '@react-navigation/native';
 
 const P = {
   teal:'#1A7A7A', tealDeep:'#1A7A7A', tealSoft:'#E8F5F5', tealMid:'#D0EEEE',
@@ -24,12 +26,27 @@ const FILTERS = [
 ];
 
 export default function ResidentListScreen({ navigation }) {
-  const residents    = useAdminStore(s => s.residents);
+  const residentsSeed = useAdminStore(s => s.residents);
+  const registeredUsers = useAuthStore(s => s.registeredUsers);
+  const fetchPendingUsers = useAuthStore(s => s.fetchPendingUsers);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchPendingUsers?.();
+    }, [fetchPendingUsers])
+  );
+  const residents = (registeredUsers || []).filter(u => String(u.role || '').toLowerCase() === 'resident').map(u => ({
+    ...u,
+    unit: u.unit || u.flat || '-',
+    phone: u.phone || '-',
+    active: (u.status || '').toLowerCase() === 'active' && (u.verificationStatus || '').toLowerCase() === 'approved',
+    kycStatus: (u.verificationStatus || '').toLowerCase() === 'approved' ? 'verified' : 'pending',
+  }));
+  const finalResidents = residents.length > 0 ? residents : (residentsSeed || []);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
 
-  const filtered = residents.filter(r => {
-    const matchSearch = r.name.toLowerCase().includes(search.toLowerCase()) || r.unit.toLowerCase().includes(search.toLowerCase());
+  const filtered = finalResidents.filter(r => {
+    const matchSearch = (r.name || '').toLowerCase().includes(search.toLowerCase()) || (r.unit || '').toLowerCase().includes(search.toLowerCase());
     const matchFilter = filter === 'all' ||
       (filter === 'active' && r.active) ||
       (filter === 'inactive' && !r.active) ||
@@ -72,7 +89,7 @@ export default function ResidentListScreen({ navigation }) {
         <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()}>
           <Text style={s.backText}>‹</Text>
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Residents ({residents.length})</Text>
+        <Text style={s.headerTitle}>Residents ({finalResidents.length})</Text>
         <TouchableOpacity style={s.addBtn} onPress={() => navigation.navigate('AddResident')}>
           <Text style={s.addBtnText}>+ Add</Text>
         </TouchableOpacity>
@@ -108,15 +125,15 @@ export default function ResidentListScreen({ navigation }) {
         {/* Stats row */}
         <View style={s.statsRow}>
           <View style={s.statPill}>
-            <Text style={s.statVal}>{residents.filter(r => r.active).length}</Text>
+            <Text style={s.statVal}>{finalResidents.filter(r => r.active).length}</Text>
             <Text style={s.statLab}>Active</Text>
           </View>
           <View style={s.statPill}>
-            <Text style={[s.statVal, { color: P.warning }]}>{residents.filter(r => r.kycStatus === 'pending').length}</Text>
+            <Text style={[s.statVal, { color: P.warning }]}>{finalResidents.filter(r => r.kycStatus === 'pending').length}</Text>
             <Text style={s.statLab}>KYC Pending</Text>
           </View>
           <View style={s.statPill}>
-            <Text style={[s.statVal, { color: P.danger }]}>{residents.filter(r => !r.active).length}</Text>
+            <Text style={[s.statVal, { color: P.danger }]}>{finalResidents.filter(r => !r.active).length}</Text>
             <Text style={s.statLab}>Inactive</Text>
           </View>
         </View>

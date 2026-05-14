@@ -24,6 +24,7 @@ const P = {
   warning: '#D97706', warningBg: '#FEF3C7',
   danger: '#DC2626', dangerBg: '#FEE2E2',
 };
+const isLegacySeedLog = (log) => /^LOG-00\d$/.test(String(log?.id || ''));
 
 function VerifyCard({ navigation }) {
   const verificationStatus = useAuthStore(s => {
@@ -125,6 +126,7 @@ export default function GuardProfileScreen({ navigation }) {
 
   const visitors   = useSecurityStore(s => s.visitors   || []);
   const deliveries = useSecurityStore(s => s.deliveries || []);
+  const entryLogs = useSecurityStore(s => s.entryLogs || []);
   const incidents  = useSecurityStore(s => s.incidents  || []);
   const handoverLogs = useSecurityStore(s => s.handoverLogs || []);
   const patrolLogs = useSecurityStore(s => s.patrolLogs  || []);
@@ -132,7 +134,12 @@ export default function GuardProfileScreen({ navigation }) {
 
   const todayStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
   const todayVisitors   = visitors.filter(v => new Date(v.checkIn || 0) >= todayStart).length;
-  const todayDeliveries = deliveries.filter(d => new Date(d.createdAt || 0) >= todayStart).length;
+  const todayDeliveries = entryLogs.filter(l =>
+    !isLegacySeedLog(l) &&
+    l.type === 'DELIVERY' &&
+    ['OTP_VERIFIED', 'QR_VERIFIED', 'CHECK_IN'].includes((l.action || '').toUpperCase()) &&
+    new Date(l.at || 0) >= todayStart
+  ).length;
   const openIncidents   = incidents.filter(i => i.status === 'open').length;
   const todayPatrols    = patrolLogs.filter(p => new Date(p.startedAt || 0) >= todayStart).length;
 

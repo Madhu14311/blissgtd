@@ -2,15 +2,28 @@
  * securityStore.js — SINGLE SOURCE OF TRUTH for all security-related state
  */
 
+// REPLACE existing imports block entirely:
+import React, { useState, useCallback, useEffect } from 'react';
+import {
+  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar,
+  ScrollView, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
+  Share, ActivityIndicator, RefreshControl,
+} from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthStore } from '../store/AuthStore';
+import {
+  createDeliveryPass,
+  fetchMyDeliveryPasses,
+  cancelDeliveryPass,
+} from '../services/deliveryApi';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const now = () => new Date().toISOString();
 const uid = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 const genOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
-const genQR  = (id) => `VISITOR|${id}|${genOTP()}`;
+const genQR = (id) => `VISITOR|${id}|${genOTP()}`;
 
 // ─── Seed Data ────────────────────────────────────────────────────────────────
 const SEED_VISITORS = [
@@ -34,7 +47,7 @@ const SEED_VISITORS = [
     entryGate: 'Main Gate',
     verifiedBy: 'sec1',
     timeline: [
-      { action: 'Visitor Created',   by: 'res1',  at: new Date(Date.now() - 2 * 86400000).toISOString() },
+      { action: 'Visitor Created', by: 'res1', at: new Date(Date.now() - 2 * 86400000).toISOString() },
       { action: 'Approved by Resident', by: 'res1', at: new Date(Date.now() - 2 * 86400000 + 300000).toISOString() },
       { action: 'Checked In at Main Gate', by: 'sec1', at: new Date(Date.now() - 2 * 86400000 + 600000).toISOString() },
     ],
@@ -59,7 +72,7 @@ const SEED_VISITORS = [
     entryGate: null,
     verifiedBy: null,
     timeline: [
-      { action: 'Visitor Created',      by: 'res1', at: new Date(Date.now() - 3600000).toISOString() },
+      { action: 'Visitor Created', by: 'res1', at: new Date(Date.now() - 3600000).toISOString() },
       { action: 'Approved by Resident', by: 'res1', at: new Date(Date.now() - 3400000).toISOString() },
     ],
   },
@@ -88,51 +101,54 @@ const SEED_VISITORS = [
   },
 ];
 
-const SEED_DELIVERIES = [
-  {
-    id: 'DEL-001',
-    provider: 'Amazon',
-    deliveryPersonName: 'Arun Singh',
-    deliveryPersonPhone: '9000011111',
-    hostUnit: 'A-101',
-    hostResidentId: 'res1',
-    hostResidentName: 'John Resident',
-    otp: '483920',
-    qrCode: 'DELIVERY|DEL-001|483920',
-    status: 'OTP_VERIFIED',
-    otpVerifiedAt: new Date(Date.now() - 1800000).toISOString(),
-    checkedInAt: new Date(Date.now() - 1800000).toISOString(),
-    deliveredAt: null,
-    checkedOutAt: null,
-    verifiedBy: 'sec1',
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    timeline: [
-      { action: 'Delivery Pass Created', by: 'res1', at: new Date(Date.now() - 7200000).toISOString() },
-      { action: 'OTP Verified by Guard', by: 'sec1', at: new Date(Date.now() - 1800000).toISOString() },
-    ],
-  },
-  {
-    id: 'DEL-002',
-    provider: 'Swiggy',
-    deliveryPersonName: 'Mohan Rao',
-    deliveryPersonPhone: '9000022222',
-    hostUnit: 'B-202',
-    hostResidentId: 'res2',
-    hostResidentName: 'Jane Resident',
-    otp: '920384',
-    qrCode: 'DELIVERY|DEL-002|920384',
-    status: 'PENDING',
-    otpVerifiedAt: null,
-    checkedInAt: null,
-    deliveredAt: null,
-    checkedOutAt: null,
-    verifiedBy: null,
-    createdAt: new Date(Date.now() - 600000).toISOString(),
-    timeline: [
-      { action: 'Delivery Pass Created', by: 'res2', at: new Date(Date.now() - 600000).toISOString() },
-    ],
-  },
-];
+// Deliveries come from backend — no seed data
+const SEED_DELIVERIES = [];
+
+// const SEED_DELIVERIES = [
+//   {
+//     id: 'DEL-001',
+//     provider: 'Amazon',
+//     deliveryPersonName: 'Arun Singh',
+//     deliveryPersonPhone: '9000011111',
+//     hostUnit: 'A-101',
+//     hostResidentId: 'res1',
+//     hostResidentName: 'John Resident',
+//     otp: '483920',
+//     qrCode: 'DELIVERY|DEL-001|483920',
+//     status: 'OTP_VERIFIED',
+//     otpVerifiedAt: new Date(Date.now() - 1800000).toISOString(),
+//     checkedInAt: new Date(Date.now() - 1800000).toISOString(),
+//     deliveredAt: null,
+//     checkedOutAt: null,
+//     verifiedBy: 'sec1',
+//     createdAt: new Date(Date.now() - 7200000).toISOString(),
+//     timeline: [
+//       { action: 'Delivery Pass Created', by: 'res1', at: new Date(Date.now() - 7200000).toISOString() },
+//       { action: 'OTP Verified by Guard', by: 'sec1', at: new Date(Date.now() - 1800000).toISOString() },
+//     ],
+//   },
+//   {
+//     id: 'DEL-002',
+//     provider: 'Swiggy',
+//     deliveryPersonName: 'Mohan Rao',
+//     deliveryPersonPhone: '9000022222',
+//     hostUnit: 'B-202',
+//     hostResidentId: 'res2',
+//     hostResidentName: 'Jane Resident',
+//     otp: '920384',
+//     qrCode: 'DELIVERY|DEL-002|920384',
+//     status: 'PENDING',
+//     otpVerifiedAt: null,
+//     checkedInAt: null,
+//     deliveredAt: null,
+//     checkedOutAt: null,
+//     verifiedBy: null,
+//     createdAt: new Date(Date.now() - 600000).toISOString(),
+//     timeline: [
+//       { action: 'Delivery Pass Created', by: 'res2', at: new Date(Date.now() - 600000).toISOString() },
+//     ],
+//   },
+// ];
 
 const SEED_VENDORS = [
   {
@@ -199,16 +215,13 @@ const SEED_SOS = [
     resolvedAt: null,
     resolvedBy: null,
     timeline: [
-      { action: 'SOS TRIGGERED',         by: 'res2', byName: 'Jane Resident', at: new Date(Date.now() - 1800000).toISOString() },
-      { action: 'Acknowledged by Guard', by: 'sec1', byName: 'Sam Security',  at: new Date(Date.now() - 1700000).toISOString() },
+      { action: 'SOS TRIGGERED', by: 'res2', byName: 'Jane Resident', at: new Date(Date.now() - 1800000).toISOString() },
+      { action: 'Acknowledged by Guard', by: 'sec1', byName: 'Sam Security', at: new Date(Date.now() - 1700000).toISOString() },
     ],
   },
 ];
 
-const SEED_ENTRY_LOGS = [
-  { id: 'LOG-001', type: 'VISITOR',  entityId: 'VIS-001', name: 'Ravi Kumar', unit: 'A-101', action: 'CHECK_IN', gate: 'Main Gate', guardId: 'sec1', at: new Date(Date.now() - 2 * 86400000 + 600000).toISOString() },
-  { id: 'LOG-002', type: 'DELIVERY', entityId: 'DEL-001', name: 'Arun Singh', unit: 'A-101', action: 'CHECK_IN', gate: 'Main Gate', guardId: 'sec1', at: new Date(Date.now() - 1800000).toISOString() },
-];
+const SEED_ENTRY_LOGS = [];
 
 const SEED_LIVE_QUEUE = [
   {
@@ -270,15 +283,15 @@ export const useSecurityStore = create(
     (set, get) => ({
 
       // ── State ──────────────────────────────────────────────────────────────
-      visitors:          SEED_VISITORS,
-      deliveries:        SEED_DELIVERIES,
-      vendors:           SEED_VENDORS,
-      blacklist:         SEED_BLACKLIST,
-      sosAlerts:         SEED_SOS,
-      entryLogs:         SEED_ENTRY_LOGS,
-      liveQueue:         SEED_LIVE_QUEUE,
-      guestParking:      SEED_GUEST_PARKING,
-      evCharging:        SEED_EV_CHARGING,
+      visitors: SEED_VISITORS,
+      deliveries: SEED_DELIVERIES,
+      vendors: SEED_VENDORS,
+      blacklist: SEED_BLACKLIST,
+      sosAlerts: SEED_SOS,
+      entryLogs: SEED_ENTRY_LOGS,
+      liveQueue: SEED_LIVE_QUEUE,
+      guestParking: SEED_GUEST_PARKING,
+      evCharging: SEED_EV_CHARGING,
       guardNotifications: [],
       handoverLogs: [
         {
@@ -323,8 +336,10 @@ export const useSecurityStore = create(
         set(s => ({
           visitors: s.visitors.map(v =>
             v.id === id
-              ? { ...v, status: 'APPROVED', approvedAt: now(),
-                  timeline: [...v.timeline, { action: 'Approved by Resident', by: residentId, at: now() }] }
+              ? {
+                ...v, status: 'APPROVED', approvedAt: now(),
+                timeline: [...v.timeline, { action: 'Approved by Resident', by: residentId, at: now() }]
+              }
               : v
           ),
         })),
@@ -333,8 +348,10 @@ export const useSecurityStore = create(
         set(s => ({
           visitors: s.visitors.map(v =>
             v.id === id
-              ? { ...v, status: 'DENIED',
-                  timeline: [...v.timeline, { action: 'Denied by Resident', by: residentId, at: now() }] }
+              ? {
+                ...v, status: 'DENIED',
+                timeline: [...v.timeline, { action: 'Denied by Resident', by: residentId, at: now() }]
+              }
               : v
           ),
         })),
@@ -358,10 +375,12 @@ export const useSecurityStore = create(
           return {
             visitors: s.visitors.map(v =>
               v.id === id
-                ? { ...v, status: 'CHECKED_IN', checkedInAt: now(), entryGate: gate,
-                    verifiedBy: guardId, verifiedByName: guardName, photo,
-                    guardVehicleNote: vehicleNote || v.vehicleNumber,
-                    timeline: [...v.timeline, { action: `Checked In at ${gate} by ${guardName}`, by: guardId, byName: guardName, at: now() }] }
+                ? {
+                  ...v, status: 'CHECKED_IN', checkedInAt: now(), entryGate: gate,
+                  verifiedBy: guardId, verifiedByName: guardName, photo,
+                  guardVehicleNote: vehicleNote || v.vehicleNumber,
+                  timeline: [...v.timeline, { action: `Checked In at ${gate} by ${guardName}`, by: guardId, byName: guardName, at: now() }]
+                }
                 : v
             ),
             entryLogs: [entry, ...s.entryLogs],
@@ -391,8 +410,10 @@ export const useSecurityStore = create(
           return {
             visitors: s.visitors.map(v =>
               v.id === id
-                ? { ...v, status: 'CHECKED_OUT', checkedOutAt: now(),
-                    timeline: [...v.timeline, { action: 'Checked Out', by: guardId, at: now() }] }
+                ? {
+                  ...v, status: 'CHECKED_OUT', checkedOutAt: now(),
+                  timeline: [...v.timeline, { action: 'Checked Out', by: guardId, at: now() }]
+                }
                 : v
             ),
             entryLogs: [entry, ...s.entryLogs],
@@ -414,78 +435,96 @@ export const useSecurityStore = create(
 
       // ── DELIVERY ACTIONS ───────────────────────────────────────────────────
 
-      addDelivery: (data) => {
-        const id = uid('DEL');
-        const otp = genOTP();
-        const delivery = {
-          id, ...data, otp,
-          qrCode: `DELIVERY|${id}|${otp}`,
-          status: 'PENDING',
-          otpVerifiedAt: null, checkedInAt: null, deliveredAt: null,
-          checkedOutAt: null, verifiedBy: null,
-          createdAt: now(),
-          timeline: [{ action: 'Delivery Pass Created', by: data.hostResidentId, at: now() }],
-        };
-        set(s => ({ deliveries: [delivery, ...s.deliveries] }));
-        return delivery;
-      },
+      // Deliveries state — populated from backend, not managed locally
+      deliveries: [],
 
-      verifyDeliveryOTP: (otp, guardId) => {
-        const { deliveries } = get();
-        const delivery = deliveries.find(d => d.otp === otp && d.status === 'PENDING');
-        if (!delivery) return { ok: false, delivery: null };
-        const logEntry = {
-          id: uid('LOG'), type: 'DELIVERY', entityId: delivery.id,
-          name: delivery.deliveryPersonName, unit: delivery.hostUnit,
-          action: 'OTP_VERIFIED', gate: 'Main Gate', guardId, at: now(),
-        };
+      setDeliveries: (list) => set({ deliveries: list }),
+
+      updateDeliveryStatus: (id, status, extraFields = {}) =>
         set(s => ({
           deliveries: s.deliveries.map(d =>
-            d.id === delivery.id
-              ? { ...d, status: 'OTP_VERIFIED', otpVerifiedAt: now(), checkedInAt: now(), verifiedBy: guardId,
-                  timeline: [...d.timeline, { action: 'OTP Verified — Entry Allowed', by: guardId, at: now() }] }
-              : d
+            d.id === id ? { ...d, status, ...extraFields } : d
           ),
-          entryLogs: [logEntry, ...s.entryLogs],
-        }));
-        return { ok: true, delivery };
-      },
-
-      verifyDeliveryQR: (qrData, guardId) => {
-        const { deliveries } = get();
-        const parts = qrData.split('|');
-        if (parts[0] !== 'DELIVERY') return { ok: false, delivery: null };
-        const delivery = deliveries.find(d => d.id === parts[1] && d.otp === parts[2] && d.status === 'PENDING');
-        if (!delivery) return { ok: false, delivery: null };
-        set(s => ({
-          deliveries: s.deliveries.map(d =>
-            d.id === delivery.id
-              ? { ...d, status: 'OTP_VERIFIED', otpVerifiedAt: now(), checkedInAt: now(), verifiedBy: guardId,
-                  timeline: [...d.timeline, { action: 'QR Verified — Entry Allowed', by: guardId, at: now() }] }
-              : d
-          ),
-          entryLogs: [{
-            id: uid('LOG'), type: 'DELIVERY', entityId: delivery.id,
-            name: delivery.deliveryPersonName, unit: delivery.hostUnit,
-            action: 'QR_VERIFIED', gate: 'Main Gate', guardId, at: now(),
-          }, ...s.entryLogs],
-        }));
-        return { ok: true, delivery };
-      },
-
-      markDelivered: (id, guardId) =>
-        set(s => ({
-          deliveries: s.deliveries.map(d =>
-            d.id === id
-              ? { ...d, status: 'DELIVERED', deliveredAt: now(), checkedOutAt: now(),
-                  timeline: [...d.timeline, { action: 'Marked Delivered + Checked Out', by: guardId, at: now() }] }
-              : d
-          ),
-          entryLogs: [{
-            id: uid('LOG'), type: 'DELIVERY', entityId: id,
-            name: '', unit: '', action: 'CHECK_OUT', gate: 'Main Gate', guardId, at: now(),
-          }, ...s.entryLogs],
         })),
+
+      // addDelivery: (data) => {
+      //   const id = uid('DEL');
+      //   const otp = genOTP();
+      //   const delivery = {
+      //     id, ...data, otp,
+      //     qrCode: `DELIVERY|${id}|${otp}`,
+      //     status: 'PENDING',
+      //     otpVerifiedAt: null, checkedInAt: null, deliveredAt: null,
+      //     checkedOutAt: null, verifiedBy: null,
+      //     createdAt: now(),
+      //     timeline: [{ action: 'Delivery Pass Created', by: data.hostResidentId, at: now() }],
+      //   };
+      //   set(s => ({ deliveries: [delivery, ...s.deliveries] }));
+      //   return delivery;
+      // },
+
+      // verifyDeliveryOTP: (otp, guardId) => {
+      //   const { deliveries } = get();
+      //   const delivery = deliveries.find(d => d.otp === otp && d.status === 'PENDING');
+      //   if (!delivery) return { ok: false, delivery: null };
+      //   const logEntry = {
+      //     id: uid('LOG'), type: 'DELIVERY', entityId: delivery.id,
+      //     name: delivery.deliveryPersonName, unit: delivery.hostUnit,
+      //     action: 'OTP_VERIFIED', gate: 'Main Gate', guardId, at: now(),
+      //   };
+      //   set(s => ({
+      //     deliveries: s.deliveries.map(d =>
+      //       d.id === delivery.id
+      //         ? {
+      //           ...d, status: 'OTP_VERIFIED', otpVerifiedAt: now(), checkedInAt: now(), verifiedBy: guardId,
+      //           timeline: [...d.timeline, { action: 'OTP Verified — Entry Allowed', by: guardId, at: now() }]
+      //         }
+      //         : d
+      //     ),
+      //     entryLogs: [logEntry, ...s.entryLogs],
+      //   }));
+      //   return { ok: true, delivery };
+      // },
+
+      // verifyDeliveryQR: (qrData, guardId) => {
+      //   const { deliveries } = get();
+      //   const parts = qrData.split('|');
+      //   if (parts[0] !== 'DELIVERY') return { ok: false, delivery: null };
+      //   const delivery = deliveries.find(d => d.id === parts[1] && d.otp === parts[2] && d.status === 'PENDING');
+      //   if (!delivery) return { ok: false, delivery: null };
+      //   set(s => ({
+      //     deliveries: s.deliveries.map(d =>
+      //       d.id === delivery.id
+      //         ? {
+      //           ...d, status: 'OTP_VERIFIED', otpVerifiedAt: now(), checkedInAt: now(), verifiedBy: guardId,
+      //           timeline: [...d.timeline, { action: 'QR Verified — Entry Allowed', by: guardId, at: now() }]
+      //         }
+      //         : d
+      //     ),
+      //     entryLogs: [{
+      //       id: uid('LOG'), type: 'DELIVERY', entityId: delivery.id,
+      //       name: delivery.deliveryPersonName, unit: delivery.hostUnit,
+      //       action: 'QR_VERIFIED', gate: 'Main Gate', guardId, at: now(),
+      //     }, ...s.entryLogs],
+      //   }));
+      //   return { ok: true, delivery };
+      // },
+
+      // markDelivered: (id, guardId) =>
+      //   set(s => ({
+      //     deliveries: s.deliveries.map(d =>
+      //       d.id === id
+      //         ? {
+      //           ...d, status: 'DELIVERED', deliveredAt: now(), checkedOutAt: now(),
+      //           timeline: [...d.timeline, { action: 'Marked Delivered + Checked Out', by: guardId, at: now() }]
+      //         }
+      //         : d
+      //     ),
+      //     entryLogs: [{
+      //       id: uid('LOG'), type: 'DELIVERY', entityId: id,
+      //       name: '', unit: '', action: 'CHECK_OUT', gate: 'Main Gate', guardId, at: now(),
+      //     }, ...s.entryLogs],
+      //   })),
 
       // ── VENDOR ACTIONS ─────────────────────────────────────────────────────
 
@@ -496,8 +535,10 @@ export const useSecurityStore = create(
         set(s => ({
           vendors: s.vendors.map(v =>
             v.id === vendorEntryId
-              ? { ...v, status: 'CHECKED_IN', checkedInAt: now(), verifiedBy: guardId,
-                  timeline: [...v.timeline, { action: 'Vendor Verified + Checked In', by: guardId, at: now() }] }
+              ? {
+                ...v, status: 'CHECKED_IN', checkedInAt: now(), verifiedBy: guardId,
+                timeline: [...v.timeline, { action: 'Vendor Verified + Checked In', by: guardId, at: now() }]
+              }
               : v
           ),
           entryLogs: [{
@@ -513,8 +554,10 @@ export const useSecurityStore = create(
         set(s => ({
           vendors: s.vendors.map(v =>
             v.id === id
-              ? { ...v, status: 'CHECKED_OUT', checkedOutAt: now(),
-                  timeline: [...v.timeline, { action: 'Vendor Checked Out', by: guardId, at: now() }] }
+              ? {
+                ...v, status: 'CHECKED_OUT', checkedOutAt: now(),
+                timeline: [...v.timeline, { action: 'Vendor Checked Out', by: guardId, at: now() }]
+              }
               : v
           ),
         })),
@@ -629,10 +672,10 @@ export const useSecurityStore = create(
           startedAt: new Date(Date.now() - 2 * 3600000).toISOString(),
           completedAt: new Date(Date.now() - 90 * 60000).toISOString(),
           checkpoints: [
-            { name: 'Main Gate',      checkedAt: new Date(Date.now() - 2 * 3600000).toISOString(), ok: true },
-            { name: 'Block A Lobby',  checkedAt: new Date(Date.now() - 105 * 60000).toISOString(), ok: true },
-            { name: 'Block B Lobby',  checkedAt: new Date(Date.now() - 100 * 60000).toISOString(), ok: true },
-            { name: 'Parking Area',   checkedAt: new Date(Date.now() - 95 * 60000).toISOString(),  ok: true },
+            { name: 'Main Gate', checkedAt: new Date(Date.now() - 2 * 3600000).toISOString(), ok: true },
+            { name: 'Block A Lobby', checkedAt: new Date(Date.now() - 105 * 60000).toISOString(), ok: true },
+            { name: 'Block B Lobby', checkedAt: new Date(Date.now() - 100 * 60000).toISOString(), ok: true },
+            { name: 'Parking Area', checkedAt: new Date(Date.now() - 95 * 60000).toISOString(), ok: true },
           ],
           remarks: 'All clear', status: 'completed',
         },
@@ -709,9 +752,11 @@ export const useSecurityStore = create(
         set(s => ({
           sosAlerts: s.sosAlerts.map(a =>
             a.id === id && a.status === 'TRIGGERED'
-              ? { ...a, status: 'ACKNOWLEDGED', acknowledgedAt: now(),
-                  acknowledgedBy: guardId, acknowledgedByName: guardName,
-                  timeline: [...a.timeline, { action: `Acknowledged by ${guardName}`, by: guardId, byName: guardName, at: now() }] }
+              ? {
+                ...a, status: 'ACKNOWLEDGED', acknowledgedAt: now(),
+                acknowledgedBy: guardId, acknowledgedByName: guardName,
+                timeline: [...a.timeline, { action: `Acknowledged by ${guardName}`, by: guardId, byName: guardName, at: now() }]
+              }
               : a
           ),
         }));
@@ -730,8 +775,10 @@ export const useSecurityStore = create(
         set(s => ({
           sosAlerts: s.sosAlerts.map(a =>
             a.id === id && ['TRIGGERED', 'ACKNOWLEDGED'].includes(a.status)
-              ? { ...a, status: 'IN_PROGRESS', inProgressAt: now(),
-                  timeline: [...a.timeline, { action: `Response in progress — ${guardName}`, by: guardId, byName: guardName, at: now() }] }
+              ? {
+                ...a, status: 'IN_PROGRESS', inProgressAt: now(),
+                timeline: [...a.timeline, { action: `Response in progress — ${guardName}`, by: guardId, byName: guardName, at: now() }]
+              }
               : a
           ),
         })),
@@ -740,9 +787,11 @@ export const useSecurityStore = create(
         set(s => ({
           sosAlerts: s.sosAlerts.map(a =>
             a.id === id && a.status !== 'RESOLVED'
-              ? { ...a, status: 'RESOLVED', resolvedAt: now(), resolvedBy: guardId,
-                  resolvedByName: guardName, resolution,
-                  timeline: [...a.timeline, { action: `✅ Resolved by ${guardName}${resolution ? ': ' + resolution : ''}`, by: guardId, byName: guardName, at: now() }] }
+              ? {
+                ...a, status: 'RESOLVED', resolvedAt: now(), resolvedBy: guardId,
+                resolvedByName: guardName, resolution,
+                timeline: [...a.timeline, { action: `✅ Resolved by ${guardName}${resolution ? ': ' + resolution : ''}`, by: guardId, byName: guardName, at: now() }]
+              }
               : a
           ),
         }));
@@ -903,8 +952,8 @@ export const useSecurityStore = create(
 
       // ── LOG ACTION ─────────────────────────────────────────────────────────
 
-      logEntry: (type, entityId, name, unit, action, gate, guardId) => {
-        const entry = { id: uid('LOG'), type, entityId, name, unit, action, gate, guardId, at: now() };
+      logEntry: (type, entityId, name, unit, action, gate, guardId, extra = {}) => {
+        const entry = { id: uid('LOG'), type, entityId, name, unit, action, gate, guardId, at: now(), ...extra };
         set(s => ({ entryLogs: [entry, ...s.entryLogs] }));
       },
 
@@ -935,7 +984,7 @@ export const useSecurityStore = create(
           try {
             const adminStore = require('./adminStore').default;
             adminStore.getState().logAmenityEntry(logEntry);
-          } catch (e) {}
+          } catch (e) { }
 
           return { ok: true, booking };
         } catch (e) { return { ok: false, reason: 'Verification error' }; }
@@ -977,7 +1026,7 @@ export const useSecurityStore = create(
           try {
             const adminStore = require('./adminStore').default;
             adminStore.getState().logEVEntry(evLog);
-          } catch (e) {}
+          } catch (e) { }
 
           // Notify resident
           try {
@@ -987,7 +1036,7 @@ export const useSecurityStore = create(
               body: `Entry verified by ${guardName} at Slot ${booking.slot}. Have a great charge!`,
               bookingId: booking.id,
             });
-          } catch (e) {}
+          } catch (e) { }
 
           return { ok: true, booking };
         } catch (e) { return { ok: false, reason: 'Verification error' }; }
@@ -1106,16 +1155,40 @@ export const useSecurityStore = create(
 
       // ── DERIVED SELECTORS ──────────────────────────────────────────────────
 
-      getActiveSOS:        () => get().sosAlerts.filter(a => a.status !== 'RESOLVED'),
-      getPendingQueue:     () => get().liveQueue.filter(q => q.status === 'WAITING' || q.status === 'RESIDENT_CALLED'),
-      getInsideVisitors:   () => get().visitors.filter(v => v.status === 'CHECKED_IN'),
-      getPendingDeliveries:() => get().deliveries.filter(d => d.status === 'PENDING'),
-      getActiveBlacklist:  () => get().blacklist.filter(b => b.active),
+      getActiveSOS: () => get().sosAlerts.filter(a => a.status !== 'RESOLVED'),
+      getPendingQueue: () => get().liveQueue.filter(q => q.status === 'WAITING' || q.status === 'RESIDENT_CALLED'),
+      getInsideVisitors: () => get().visitors.filter(v => v.status === 'CHECKED_IN'),
+      getPendingDeliveries: () => get().deliveries.filter(d => d.status === 'PENDING'),
+      getActiveBlacklist: () => get().blacklist.filter(b => b.active),
     }),
 
     {
       name: 'bs-security-storage-v2',
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        visitors: state.visitors,
+        deliveries: state.deliveries,
+        vendors: state.vendors,
+        blacklist: state.blacklist,
+        sosAlerts: state.sosAlerts,
+        entryLogs: state.entryLogs,
+        liveQueue: state.liveQueue,
+        guestParking: state.guestParking,
+        evCharging: state.evCharging,
+        guardNotifications: state.guardNotifications,
+        handoverLogs: state.handoverLogs,
+        patrolLogs: state.patrolLogs,
+        guardShifts: state.guardShifts,
+      }),
+      merge: (persistedState, currentState) => {
+        const merged = {
+          ...currentState,
+          ...(persistedState || {}),
+        };
+        const logs = Array.isArray(merged.entryLogs) ? merged.entryLogs : [];
+        merged.entryLogs = logs.filter(l => !/^LOG-00\d$/.test(String(l?.id || '')));
+        return merged;
+      },
     }
   )
 );

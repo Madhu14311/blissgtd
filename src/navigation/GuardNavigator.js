@@ -5,6 +5,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import RoleGuard from '../guards/RoleGuard';
+import VerifyLockScreen from '../components/common/VerifyLockScreen';
 
 // Dashboard
 import GuardDashboard from '../screens/guard/dashboard/GuardDashboard';
@@ -38,38 +39,65 @@ import VerificationScreen from '../screens/auth/VerificationScreen';
 
 const Stack = createNativeStackNavigator();
 
+function withGuardApprovalLock(Component) {
+  return function GuardApprovalLockedScreen(props) {
+    return (
+      <VerifyLockScreen navigation={props.navigation}>
+        <Component {...props} />
+      </VerifyLockScreen>
+    );
+  };
+}
+
+const LockedVisitorVerificationScreen = withGuardApprovalLock(VisitorVerificationScreen);
+const LockedWalkInEntryScreen = withGuardApprovalLock(WalkInEntryScreen);
+const LockedDeliveryVerificationScreen = withGuardApprovalLock(DeliveryVerificationScreen);
+const LockedVehicleEntryScreen = withGuardApprovalLock(VehicleEntryScreen);
+const LockedSOSScreen = withGuardApprovalLock(SOSScreen);
+const LockedVendorVerificationScreen = withGuardApprovalLock(VendorVerificationScreen);
+const LockedBlacklistAlertScreen = withGuardApprovalLock(BlacklistAlertScreen);
+const LockedEntryLogsScreen = withGuardApprovalLock(EntryLogsScreen);
+const LockedSecurityIncidentScreen = withGuardApprovalLock(SecurityIncidentScreen);
+const LockedShiftHandoverScreen = withGuardApprovalLock(ShiftHandoverScreen);
+const LockedPatrolLogScreen = withGuardApprovalLock(PatrolLogScreen);
+const LockedAmenityVerificationScreen = withGuardApprovalLock(AmenityVerificationScreen);
+const LockedGuardBiometricScreen = withGuardApprovalLock(GuardBiometricScreen);
+const LockedGuardNotificationsScreen = withGuardApprovalLock(GuardNotificationsScreen);
+const LockedGuardProfileScreen = withGuardApprovalLock(GuardProfileScreen);
+const LockedVerificationScreen = withGuardApprovalLock(VerificationScreen);
+
 function GuardStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       {/* Dashboard */}
       <Stack.Screen name="GuardDashboard"       component={GuardDashboard} />
       {/* Visitors */}
-      <Stack.Screen name="VisitorVerification"  component={VisitorVerificationScreen} />
-      <Stack.Screen name="WalkInEntry"          component={WalkInEntryScreen} />
+      <Stack.Screen name="VisitorVerification"  component={LockedVisitorVerificationScreen} />
+      <Stack.Screen name="WalkInEntry"          component={LockedWalkInEntryScreen} />
       {/* Deliveries */}
-      <Stack.Screen name="DeliveryVerification" component={DeliveryVerificationScreen} />
+      <Stack.Screen name="DeliveryVerification" component={LockedDeliveryVerificationScreen} />
       {/* Vehicles */}
-      <Stack.Screen name="VehicleEntry"         component={VehicleEntryScreen} />
+      <Stack.Screen name="VehicleEntry"         component={LockedVehicleEntryScreen} />
       {/* SOS */}
-      <Stack.Screen name="GuardSOS"             component={SOSScreen} />
+      <Stack.Screen name="GuardSOS"             component={LockedSOSScreen} />
       {/* Utilities */}
-      <Stack.Screen name="VendorVerification"   component={VendorVerificationScreen} />
-      <Stack.Screen name="BlacklistAlert"       component={BlacklistAlertScreen} />
-      <Stack.Screen name="EntryLogs"            component={EntryLogsScreen} />
+      <Stack.Screen name="VendorVerification"   component={LockedVendorVerificationScreen} />
+      <Stack.Screen name="BlacklistAlert"       component={LockedBlacklistAlertScreen} />
+      <Stack.Screen name="EntryLogs"            component={LockedEntryLogsScreen} />
       {/* Incidents / Shift */}
-      <Stack.Screen name="SecurityIncident"     component={SecurityIncidentScreen} />
-      <Stack.Screen name="ShiftHandover"        component={ShiftHandoverScreen} />
-      <Stack.Screen name="PatrolLog"            component={PatrolLogScreen} />
+      <Stack.Screen name="SecurityIncident"     component={LockedSecurityIncidentScreen} />
+      <Stack.Screen name="ShiftHandover"        component={LockedShiftHandoverScreen} />
+      <Stack.Screen name="PatrolLog"            component={LockedPatrolLogScreen} />
       {/* Amenities */}
-      <Stack.Screen name="AmenityVerification"  component={AmenityVerificationScreen} />
+      <Stack.Screen name="AmenityVerification"  component={LockedAmenityVerificationScreen} />
       {/* Biometric */}
-      <Stack.Screen name="GuardBiometric"       component={GuardBiometricScreen} />
+      <Stack.Screen name="GuardBiometric"       component={LockedGuardBiometricScreen} />
       {/* Notifications */}
-      <Stack.Screen name="GuardNotifications"   component={GuardNotificationsScreen} />
+      <Stack.Screen name="GuardNotifications"   component={LockedGuardNotificationsScreen} />
       {/* Profile */}
-      <Stack.Screen name="GuardProfile"         component={GuardProfileScreen} />
+      <Stack.Screen name="GuardProfile"         component={LockedGuardProfileScreen} />
       {/* Verification */}
-      <Stack.Screen name="Verification"         component={VerificationScreen} />
+      <Stack.Screen name="Verification"         component={LockedVerificationScreen} />
     </Stack.Navigator>
   );
 }

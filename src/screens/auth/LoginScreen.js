@@ -113,7 +113,7 @@ function LoginContent({ navigation }) {
       return;
     }
 
-    const result = await loginUser(loginPhone.trim(), loginPassword.trim());
+    const result = await loginUser(loginPhone.trim(), loginPassword.trim(), ROLE_KEYS[loginRole]);
 
     if (!result.success && result.status === "not_found") {
       Alert.alert(
@@ -209,6 +209,22 @@ function LoginContent({ navigation }) {
     });
 
     loginAsCustomer(customer);
+  };
+
+  const handleQuickDemoLogin = async (roleLabel) => {
+    const roleKey = ROLE_KEYS[roleLabel];
+    if (roleKey === "superadmin") {
+      // SuperAdmin actions call protected backend APIs, so quick login must fetch a real JWT.
+      const result = await loginUser("9000000000", "admin123", "superadmin");
+      if (!result?.success) {
+        Alert.alert(
+          "Super Admin Login Failed",
+          result?.message || "Unable to fetch backend token. Please login with credentials."
+        );
+      }
+      return;
+    }
+    login(roleKey);
   };
 
   return (
@@ -414,7 +430,7 @@ function LoginContent({ navigation }) {
                             key={role}
                             activeOpacity={0.85}
                             style={s.demoChip}
-                            onPress={() => login(ROLE_KEYS[role])}
+                            onPress={() => handleQuickDemoLogin(role)}
                           >
                             <Text style={s.demoChipText}>{role}</Text>
                           </TouchableOpacity>

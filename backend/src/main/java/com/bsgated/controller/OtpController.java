@@ -3,7 +3,7 @@ package com.bsgated.controller;
 import com.bsgated.payload.OtpRequest;
 import com.bsgated.payload.OtpVerificationRequest;
 import com.bsgated.service.OtpService;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,14 +12,16 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/otp")
-@CrossOrigin(origins = "*")
 public class OtpController {
 
-    @Autowired
-    private OtpService otpService;
+    private final OtpService otpService;
+
+    public OtpController(OtpService otpService) {
+        this.otpService = otpService;
+    }
 
     @PostMapping("/send")
-    public ResponseEntity<Map<String, String>> sendOtp(@RequestBody OtpRequest request) {
+    public ResponseEntity<Map<String, String>> sendOtp(@Valid @RequestBody OtpRequest request) {
         String status = otpService.sendOtp(request.getPhoneNumber());
         Map<String, String> response = new HashMap<>();
         response.put("status", status);
@@ -31,7 +33,7 @@ public class OtpController {
     }
 
     @PostMapping("/verify")
-    public ResponseEntity<Map<String, Object>> verifyOtp(@RequestBody OtpVerificationRequest request) {
+    public ResponseEntity<Map<String, Object>> verifyOtp(@Valid @RequestBody OtpVerificationRequest request) {
         boolean isVerified = otpService.verifyOtp(request.getPhoneNumber(), request.getOtp());
         Map<String, Object> response = new HashMap<>();
         response.put("verified", isVerified);

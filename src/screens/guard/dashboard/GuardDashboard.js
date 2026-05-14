@@ -20,6 +20,7 @@ import { useTheme }         from '../../../hooks/useTheme';
 const TEAL     = '#1A7A7A';
 const TEAL_DK  = '#0D6E6E';
 const BG       = '#E8F5F5';
+const isLegacySeedLog = (log) => /^LOG-00\d$/.test(String(log?.id || ''));
 
 // ─── Bottom Tab Bar ───────────────────────────────────────────────────────────
 function GuardTabBar({ active, navigation }) {
@@ -133,11 +134,20 @@ export default function GuardDashboard({ navigation }) {
   const blacklist      = useSecurityStore(s => s.blacklist);
   const incidents      = useSecurityStore(s => s.incidents || []);
   const guardNotifications = useSecurityStore(s => s.guardNotifications || []);
+  const entryLogs = useSecurityStore(s => s.entryLogs || []);
 
   const activeSOS         = sosAlerts.filter(a => a.status !== 'RESOLVED');
   const pendingQueue      = liveQueue.filter(q => q.status === 'WAITING' || q.status === 'RESIDENT_CALLED');
   const insideVisitors    = visitors.filter(v => v.status === 'CHECKED_IN');
-  const pendingDeliveries = deliveries.filter(d => d.status === 'PENDING');
+  const pendingDeliveries = deliveries.filter(d => (d.status || '').toUpperCase() === 'PENDING');
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const deliveriesTodayCount = entryLogs.filter(l =>
+    !isLegacySeedLog(l) &&
+    l.type === 'DELIVERY' &&
+    ['OTP_VERIFIED', 'QR_VERIFIED', 'CHECK_IN'].includes((l.action || '').toUpperCase()) &&
+    new Date(l.at || 0) >= todayStart
+  ).length;
   const activeBlacklist   = blacklist.filter(b => b.active);
   const openIncidents     = incidents.filter(i => i.status === 'open');
   const unreadNotifs      = guardNotifications.filter(n => !n.read).length;
@@ -176,7 +186,7 @@ export default function GuardDashboard({ navigation }) {
         <View style={styles.statsGrid}>
           <StatCard label="At Gate"    value={pendingQueue.length}      color="#DC2626" bg="#FEF2F2" emoji="🚶" />
           <StatCard label="Inside"     value={insideVisitors.length}    color={TEAL}    bg="#F0FDFA" emoji="🏠" />
-          <StatCard label="Deliveries" value={pendingDeliveries.length} color="#D97706" bg="#FFFBEB" emoji="📦" />
+          <StatCard label="Deliveries Today" value={deliveriesTodayCount} color="#D97706" bg="#FFFBEB" emoji="📦" />
           <StatCard label="Open Incidents" value={openIncidents.length} color="#7C3AED" bg="#F5F3FF" emoji="⚠️" />
         </View>
 

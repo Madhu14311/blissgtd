@@ -60,6 +60,7 @@ export default function EntryLogsScreen({ navigation }) {
   const [filter, setFilter] = useState('ALL');
 
   const FILTERS = ['ALL', 'VISITOR', 'DELIVERY', 'VENDOR'];
+  const isLegacySeedLog = (log) => /^LOG-00\d$/.test(String(log?.id || ''));
   const TYPE_META = {
     VISITOR:  { emoji: '👤', color: theme.primary },
     DELIVERY: { emoji: '📦', color: theme.warning },
@@ -72,11 +73,17 @@ export default function EntryLogsScreen({ navigation }) {
     QR_VERIFIED:  { label: 'QR Verified', color: theme.primary },
   };
 
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
   const filtered = entryLogs
+    .filter(l => !isLegacySeedLog(l))
+    .filter(l => new Date(l.at || 0) >= todayStart)
     .filter(l => filter === 'ALL' || l.type === filter)
     .filter(l => !search ||
-      l.name.toLowerCase().includes(search.toLowerCase()) ||
-      l.unit.toLowerCase().includes(search.toLowerCase())
+      (l.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (l.unit || '').toLowerCase().includes(search.toLowerCase()) ||
+      (l.hostResidentName || '').toLowerCase().includes(search.toLowerCase())
     );
 
   return (
@@ -118,6 +125,9 @@ export default function EntryLogsScreen({ navigation }) {
                 <View style={{ flex: 1 }}>
                   <Text style={s.logName}>{item.name || item.type}</Text>
                   <Text style={s.logSub}>Unit {item.unit} · {item.gate}</Text>
+                  {item.type === 'DELIVERY' && !!item.hostResidentName && (
+                    <Text style={s.logSub}>Resident: {item.hostResidentName}</Text>
+                  )}
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <View style={[s.logBadge, { backgroundColor: am.color + '15' }]}>

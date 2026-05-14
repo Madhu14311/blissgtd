@@ -1,9 +1,20 @@
-module.exports = function(api) {
-  api.cache(true);
+module.exports = function (api) {
+
+  const isWeb = api.caller((caller) => caller?.platform === 'web');
+
   return {
-    presets: ['babel-preset-expo'],
+    presets: [
+      [
+        'babel-preset-expo',
+        {
+
+          unstable_transformImportMeta: true,
+        },
+      ],
+    ],
     plugins: [
-      'react-native-reanimated/plugin',
+
+      ...(!isWeb ? ['react-native-reanimated/plugin'] : []),
     ],
   };
 };

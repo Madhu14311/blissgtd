@@ -28,6 +28,7 @@ import AmenitiesAdminScreen from '../screens/admin/amenities/AmenitiesAdminScree
 import AddAmenityScreen     from '../screens/admin/amenities/AddAmenityScreen';
 // Visitors / Blacklist
 import VisitorLogsScreen    from '../screens/admin/visitors/VisitorLogsScreen';
+import AdminDeliveryLogsScreen from '../screens/admin/visitors/AdminDeliveryLogsScreen';
 import BlacklistScreen      from '../screens/admin/visitors/BlacklistScreen';
 // Notices
 import AdminNoticeBoardScreen from '../screens/admin/notices/AdminNoticeBoardScreen';
@@ -86,6 +87,7 @@ function AdminStack() {
       <Stack.Screen name="AddAmenity"        component={AddAmenityScreen} />
       {/* Visitors / Blacklist */}
       <Stack.Screen name="VisitorLogs"       component={VisitorLogsScreen} />
+      <Stack.Screen name="AdminDeliveryLogs" component={AdminDeliveryLogsScreen} />
       <Stack.Screen name="AdminBlacklist"    component={BlacklistScreen} />
       {/* Notices */}
       <Stack.Screen name="AdminNoticeBoard"  component={AdminNoticeBoardScreen} />

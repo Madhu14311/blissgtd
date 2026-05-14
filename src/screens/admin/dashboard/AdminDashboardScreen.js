@@ -15,11 +15,12 @@
  * Stores used: AuthStore, adminStore, appStore, securityStore
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar,
   ScrollView, Animated, RefreshControl, Platform, Alert,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { useAuthStore }     from '../../../store/AuthStore';
 import useAdminStore        from '../../../store/adminStore';
@@ -299,8 +300,8 @@ export default function AdminHomeScreen({ navigation }) {
   const logout = useAuthStore(s => s.logout);
 
   // ── Store data ──────────────────────────────────────────────────────────────
-  const residents      = useAdminStore(s => s.residents);
-  const guards         = useAdminStore(s => s.guards);
+  const residentsSeed  = useAdminStore(s => s.residents);
+  const guardsSeed     = useAdminStore(s => s.guards);
   const visitors       = useAdminStore(s => s.visitors);
   const blacklist      = useAdminStore(s => s.blacklist);
   const notifications  = useAdminStore(s => s.notifications);
@@ -316,6 +317,34 @@ export default function AdminHomeScreen({ navigation }) {
   // Pending registrations from AuthStore (the real source of truth for new users)
   // Get real-time pending users from the store
   const registeredUsers   = useAuthStore(s => s.registeredUsers);
+  const fetchPendingUsers = useAuthStore(s => s.fetchPendingUsers);
+  useFocusEffect(
+    useCallback(() => {
+      fetchPendingUsers?.();
+    }, [fetchPendingUsers])
+  );
+  const residents = useMemo(() => {
+    const fromApi = (registeredUsers || []).filter(
+      u => String(u.role || '').toLowerCase() === 'resident'
+    );
+    if (fromApi.length === 0) return residentsSeed || [];
+    return fromApi.map(u => ({
+      ...u,
+      active: (u.status || '').toLowerCase() === 'active' && (u.verificationStatus || '').toLowerCase() === 'approved',
+      kycStatus: (u.verificationStatus || '').toLowerCase() === 'approved' ? 'verified' : 'pending',
+    }));
+  }, [registeredUsers, residentsSeed]);
+  const guards = useMemo(() => {
+    const fromApi = (registeredUsers || []).filter(u => {
+      const role = String(u.role || '').toLowerCase();
+      return role === 'security' || role === 'guard';
+    });
+    if (fromApi.length === 0) return guardsSeed || [];
+    return fromApi.map(u => ({
+      ...u,
+      active: (u.status || '').toLowerCase() === 'active' && (u.verificationStatus || '').toLowerCase() === 'approved',
+    }));
+  }, [registeredUsers, guardsSeed]);
   const pendingApprovals  = registeredUsers.filter(
     u => (u.verificationStatus === 'pending' || u.approvalStatus === 'pending' || u.status === 'pending') &&
          ['resident', 'vendor', 'security'].includes(u.role?.toLowerCase())
@@ -522,7 +551,7 @@ export default function AdminHomeScreen({ navigation }) {
                 { emoji: '🛡️', label: 'Guards',     color: P.teal,    route: 'GuardManagement',  badge: 0 },
                 { emoji: '👔', label: 'Staff',       color: '#6A1B9A', route: 'StaffManagement',  badge: 0 },
                 { emoji: '🚫', label: 'Blacklist',   color: P.danger,  route: 'AdminBlacklist',   badge: blacklist?.length ?? 0 },
-                { emoji: '📦', label: 'Deliveries',  color: '#0D9488', route: 'VisitorLogs',      badge: pendingDeliveries },
+                { emoji: '📦', label: 'Deliveries',  color: '#0D9488', route: 'AdminDeliveryLogs', badge: pendingDeliveries },
               ]}
             />
           </View>
